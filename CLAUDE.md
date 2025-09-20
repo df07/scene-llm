@@ -33,7 +33,7 @@ go build -o scene-llm main.go
 # Build web server
 cd web && go build -o scene-server main.go
 
-# Run web server with auto-reload
+# Run web server with auto-reload (from web directory)
 cd web && air
 
 # Run tests
