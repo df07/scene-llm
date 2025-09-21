@@ -2,9 +2,8 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-  args_bin = ["-port", "8081"]
-  bin = "./tmp/scene-server"
   cmd = "go build -o ./tmp/scene-server main.go"
+  full_bin = "bash -c 'set -a; source ../.env 2>/dev/null || true; set +a; ./tmp/scene-server -port 8081'"
   delay = 1000
   exclude_dir = ["tmp", "static"]
   exclude_regex = ["_test.go"]

@@ -50,3 +50,5 @@ renders/
 # Profile files
 *.prof
 .claude/settings.local.json
+.env
+test-render.png
