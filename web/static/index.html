@@ -1,9 +1,41 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Scene LLM</title>
+    <title>Scene LLM - Generate 3D Scenes with AI</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>Hello, World</h1>
+    <div class="container">
+        <h1>🎨 Scene LLM</h1>
+        <p style="text-align: center; color: #666; margin-bottom: 30px;">
+            Generate 3D scenes using natural language
+        </p>
+
+        <form id="sceneForm">
+            <div class="input-group">
+                <label for="prompt">Describe your scene:</label>
+                <input
+                    type="text"
+                    id="prompt"
+                    name="prompt"
+                    placeholder="Create a blue sphere"
+                    value="Create a blue sphere"
+                    required
+                >
+            </div>
+            <button type="submit" id="generateBtn">Generate Scene</button>
+        </form>
+
+        <div id="loading" class="loading hidden">
+            🤖 Generating your scene...
+        </div>
+
+        <div id="result" class="result hidden">
+            <h3 id="resultTitle">Result</h3>
+            <div id="resultContent"></div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
 </body>
 </html>
