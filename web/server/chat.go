@@ -10,7 +10,6 @@ import (
 	"image/png"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/df07/go-progressive-raytracer/pkg/core"
@@ -19,34 +18,15 @@ import (
 	"github.com/df07/go-progressive-raytracer/pkg/material"
 	"github.com/df07/go-progressive-raytracer/pkg/renderer"
 	"github.com/df07/go-progressive-raytracer/pkg/scene"
+	"github.com/df07/scene-llm/agent"
 	"google.golang.org/genai"
 )
 
 // ChatSession represents an ongoing conversation
 type ChatSession struct {
-	ID       string           `json:"id"`
-	Messages []*genai.Content `json:"messages"`
-	Scene    *SceneState      `json:"scene"`
-}
-
-// SceneState represents the current 3D scene
-type SceneState struct {
-	Shapes []ShapeRequest `json:"shapes"`
-	Camera CameraInfo     `json:"camera"`
-}
-
-// ShapeRequest represents the LLM's shape creation request
-type ShapeRequest struct {
-	Type     string     `json:"type"`
-	Position [3]float64 `json:"position"`
-	Size     float64    `json:"size"`
-	Color    [3]float64 `json:"color"`
-}
-
-// CameraInfo represents camera information
-type CameraInfo struct {
-	Position [3]float64 `json:"position"`
-	LookAt   [3]float64 `json:"look_at"`
+	ID       string            `json:"id"`
+	Messages []*genai.Content  `json:"messages"`
+	Scene    *agent.SceneState `json:"scene"`
 }
 
 // ChatMessage represents a chat message request
@@ -89,9 +69,9 @@ func (s *Server) getOrCreateSession(sessionID string) *ChatSession {
 		session = &ChatSession{
 			ID:       sessionID,
 			Messages: []*genai.Content{},
-			Scene: &SceneState{
-				Shapes: []ShapeRequest{},
-				Camera: CameraInfo{
+			Scene: &agent.SceneState{
+				Shapes: []agent.ShapeRequest{},
+				Camera: agent.CameraInfo{
 					Position: [3]float64{0, 0, 5},
 					LookAt:   [3]float64{0, 0, 0},
 				},
@@ -284,223 +264,96 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 
 // processMessage processes a chat message and streams responses via SSE to all connected clients
 func (s *Server) processMessage(session *ChatSession, message string) {
-	// Send thinking indicator
-	s.broadcastToSession(session.ID, SSEChatEvent{
-		Type: "thinking",
-		Data: "🤖 Processing your request...",
-	})
+	// Create channel for agent events
+	agentEvents := make(chan agent.AgentEvent, 10)
 
-	// Get API key
-	apiKey := os.Getenv("GOOGLE_API_KEY")
-	if apiKey == "" {
-		log.Printf("GOOGLE_API_KEY not set for session %s", session.ID)
-		s.broadcastToSession(session.ID, SSEChatEvent{
-			Type: "error",
-			Data: "API key not configured",
-		})
-		return
-	}
-
-	// Create Gemini client
-	ctx := context.Background()
-	client, err := genai.NewClient(ctx, &genai.ClientConfig{
-		APIKey:  apiKey,
-		Backend: genai.BackendGeminiAPI,
-	})
+	// Create agent
+	ag, err := agent.New(agentEvents)
 	if err != nil {
-		log.Printf("Failed to create Gemini client for session %s: %v", session.ID, err)
-		s.broadcastToSession(session.ID, SSEChatEvent{
-			Type: "error",
-			Data: fmt.Sprintf("Failed to create LLM client: %v", err),
-		})
+		s.broadcastToSession(session.ID, SSEChatEvent{Type: "error", Data: err.Error()})
 		return
 	}
+	defer ag.Close()
 
-	// Define the create_shape function for the LLM
-	createShapeFunc := &genai.FunctionDeclaration{
-		Name:        "create_shape",
-		Description: "Create a 3D shape in the scene",
-		Parameters: &genai.Schema{
-			Type: genai.TypeObject,
-			Properties: map[string]*genai.Schema{
-				"type": {
-					Type:        genai.TypeString,
-					Enum:        []string{"sphere", "box"},
-					Description: "The type of shape to create",
-				},
-				"position": {
-					Type:        genai.TypeArray,
-					Items:       &genai.Schema{Type: genai.TypeNumber},
-					Description: "The position of the shape as [x, y, z]",
-				},
-				"size": {
-					Type:        genai.TypeNumber,
-					Description: "The size of the shape (radius for sphere, side length for cube)",
-				},
-				"color": {
-					Type:        genai.TypeArray,
-					Items:       &genai.Schema{Type: genai.TypeNumber},
-					Description: "RGB color values as [r, g, b] where each value is between 0.0 and 1.0",
-				},
-			},
-			Required: []string{"type", "position", "size", "color"},
-		},
+	// Build scene context
+	sceneContext := s.buildSceneContext(session.Scene)
+
+	// Start agent processing in goroutine
+	go func() {
+		if err := ag.ProcessMessage(context.Background(), session.Messages, sceneContext); err != nil {
+			agentEvents <- agent.NewErrorEvent(err)
+		}
+		close(agentEvents)
+	}()
+
+	// Listen for events and handle them
+	for event := range agentEvents {
+		switch e := event.(type) {
+		case agent.ResponseEvent:
+			// Handle text response - add to conversation history
+			// Add to conversation history
+			s.mutex.Lock()
+			assistantMessage := &genai.Content{
+				Parts: []*genai.Part{{Text: e.Text}},
+				Role:  "model",
+			}
+			session.Messages = append(session.Messages, assistantMessage)
+			s.mutex.Unlock()
+			// Broadcast the response
+			s.broadcastToSession(session.ID, SSEChatEvent{Type: e.EventType(), Data: e.Text})
+
+		case agent.ToolCallEvent:
+			// Handle function calls - update scene and render
+			// Update scene with function calls
+			s.mutex.Lock()
+			session.Scene.Shapes = append(session.Scene.Shapes, e.Shapes...)
+			// Update camera to look at the first shape with proper distance
+			if len(e.Shapes) > 0 {
+				firstShape := e.Shapes[0]
+				cameraDistance := firstShape.Size*3 + 5
+				session.Scene.Camera.Position = [3]float64{firstShape.Position[0], firstShape.Position[1], firstShape.Position[2] + cameraDistance}
+				session.Scene.Camera.LookAt = firstShape.Position
+			}
+			s.mutex.Unlock()
+
+			// Broadcast function calls
+			s.broadcastToSession(session.ID, SSEChatEvent{Type: e.EventType(), Data: e.Shapes})
+
+			// Render updated scene
+			s.renderAndBroadcastScene(session)
+
+		case agent.ThinkingEvent:
+			s.broadcastToSession(session.ID, SSEChatEvent{Type: e.EventType(), Data: e.Message})
+		case agent.ErrorEvent:
+			s.broadcastToSession(session.ID, SSEChatEvent{Type: e.EventType(), Data: e.Message})
+		case agent.CompleteEvent:
+			s.broadcastToSession(session.ID, SSEChatEvent{Type: e.EventType(), Data: e.Message})
+		case agent.SceneUpdateEvent:
+			s.broadcastToSession(session.ID, SSEChatEvent{Type: e.EventType(), Data: e.Scene})
+		default:
+			// Fallback for any unhandled event types
+			s.broadcastToSession(session.ID, SSEChatEvent{Type: "unknown", Data: "Unknown event type"})
+		}
 	}
+}
 
-	// Create tools
-	tools := []*genai.Tool{{FunctionDeclarations: []*genai.FunctionDeclaration{createShapeFunc}}}
-
-	// Build conversation context including current scene state
-	s.mutex.RLock()
-	messages := make([]*genai.Content, len(session.Messages))
-	copy(messages, session.Messages)
-	currentScene := session.Scene
-	s.mutex.RUnlock()
-
-	// Add system context about current scene
+// buildSceneContext creates a context string describing the current scene state
+func (s *Server) buildSceneContext(scene *agent.SceneState) string {
 	sceneContext := "Current scene state: "
-	if len(currentScene.Shapes) == 0 {
+	if len(scene.Shapes) == 0 {
 		sceneContext += "empty scene with no objects."
 	} else {
-		sceneContext += fmt.Sprintf("%d shapes: ", len(currentScene.Shapes))
-		for i, shape := range currentScene.Shapes {
+		sceneContext += fmt.Sprintf("%d shapes: ", len(scene.Shapes))
+		for i, shape := range scene.Shapes {
 			sceneContext += fmt.Sprintf("%d) %s at [%.1f,%.1f,%.1f] size %.1f color [%.1f,%.1f,%.1f]",
 				i+1, shape.Type, shape.Position[0], shape.Position[1], shape.Position[2],
 				shape.Size, shape.Color[0], shape.Color[1], shape.Color[2])
-			if i < len(currentScene.Shapes)-1 {
+			if i < len(scene.Shapes)-1 {
 				sceneContext += ", "
 			}
 		}
 	}
-
-	// Add scene context to the first user message instead of using a system role
-	contextualizedMessages := make([]*genai.Content, len(messages))
-	copy(contextualizedMessages, messages)
-
-	// Prepend context to the latest user message
-	if len(contextualizedMessages) > 0 {
-		lastMessage := contextualizedMessages[len(contextualizedMessages)-1]
-		if lastMessage.Role == "user" && len(lastMessage.Parts) > 0 {
-			// Prepend context to the user's message
-			originalText := lastMessage.Parts[0].Text
-			contextualText := fmt.Sprintf("Context: You are a 3D scene assistant. %s\n\nUser request: %s", sceneContext, originalText)
-			lastMessage.Parts[0].Text = contextualText
-		}
-	}
-
-	fullConversation := contextualizedMessages
-
-	// Generate content with function calling
-	result, err := client.Models.GenerateContent(ctx, "gemini-2.5-flash", fullConversation, &genai.GenerateContentConfig{
-		Tools: tools,
-	})
-	if err != nil {
-		log.Printf("Failed to generate content for session %s: %v", session.ID, err)
-		s.broadcastToSession(session.ID, SSEChatEvent{
-			Type: "error",
-			Data: fmt.Sprintf("LLM generation failed: %v", err),
-		})
-		return
-	}
-
-	// Process the response
-	if len(result.Candidates) == 0 || len(result.Candidates[0].Content.Parts) == 0 {
-		log.Printf("No response from LLM for session %s", session.ID)
-		s.broadcastToSession(session.ID, SSEChatEvent{
-			Type: "error",
-			Data: "No response from LLM",
-		})
-		return
-	}
-
-	var assistantMessage *genai.Content
-	var functionCalls []ShapeRequest
-	hasTextResponse := false
-
-	for _, part := range result.Candidates[0].Content.Parts {
-		// Handle function calls
-		if part.FunctionCall != nil && part.FunctionCall.Name == "create_shape" {
-			var shapeRequest ShapeRequest
-			args := part.FunctionCall.Args
-
-			if typeVal, ok := args["type"].(string); ok {
-				shapeRequest.Type = typeVal
-			}
-			if posVal, ok := args["position"].([]interface{}); ok && len(posVal) == 3 {
-				for i, v := range posVal {
-					if f, ok := v.(float64); ok {
-						shapeRequest.Position[i] = f
-					}
-				}
-			}
-			if sizeVal, ok := args["size"].(float64); ok {
-				shapeRequest.Size = sizeVal
-			}
-			if colorVal, ok := args["color"].([]interface{}); ok && len(colorVal) == 3 {
-				for i, v := range colorVal {
-					if f, ok := v.(float64); ok {
-						shapeRequest.Color[i] = f
-					}
-				}
-			}
-
-			functionCalls = append(functionCalls, shapeRequest)
-		}
-
-		// Handle text response
-		if part.Text != "" {
-			if assistantMessage == nil {
-				assistantMessage = &genai.Content{
-					Parts: []*genai.Part{},
-					Role:  "model",
-				}
-			}
-			assistantMessage.Parts = append(assistantMessage.Parts, &genai.Part{Text: part.Text})
-			hasTextResponse = true
-		}
-	}
-
-	// Broadcast LLM text response
-	if hasTextResponse && assistantMessage != nil {
-		s.broadcastToSession(session.ID, SSEChatEvent{
-			Type: "llm_response",
-			Data: assistantMessage.Parts[0].Text,
-		})
-
-		// Add to conversation history
-		s.mutex.Lock()
-		session.Messages = append(session.Messages, assistantMessage)
-		s.mutex.Unlock()
-	}
-
-	// Update scene with function calls
-	if len(functionCalls) > 0 {
-		s.mutex.Lock()
-		session.Scene.Shapes = append(session.Scene.Shapes, functionCalls...)
-		// Update camera to look at the first shape with proper distance
-		if len(functionCalls) > 0 {
-			firstShape := functionCalls[0]
-			cameraDistance := firstShape.Size*3 + 5
-			session.Scene.Camera.Position = [3]float64{firstShape.Position[0], firstShape.Position[1], firstShape.Position[2] + cameraDistance}
-			session.Scene.Camera.LookAt = firstShape.Position
-		}
-		s.mutex.Unlock()
-
-		// Broadcast function calls
-		s.broadcastToSession(session.ID, SSEChatEvent{
-			Type: "function_calls",
-			Data: functionCalls,
-		})
-
-		// Render updated scene
-		s.renderAndBroadcastScene(session)
-	}
-
-	// Send completion signal
-	s.broadcastToSession(session.ID, SSEChatEvent{
-		Type: "complete",
-		Data: "Processing finished",
-	})
+	return sceneContext
 }
 
 // renderAndBroadcastScene renders the current scene and broadcasts to SSE clients
@@ -555,7 +408,7 @@ func (s *Server) renderAndBroadcastScene(session *ChatSession) {
 }
 
 // createSceneWithShapes builds a complete scene with all shapes plus defaults
-func (s *Server) createSceneWithShapes(shapes []ShapeRequest) *scene.Scene {
+func (s *Server) createSceneWithShapes(shapes []agent.ShapeRequest) *scene.Scene {
 	// Scene configuration
 	samplingConfig := scene.SamplingConfig{
 		Width:                     400,
