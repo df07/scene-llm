@@ -12,10 +12,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/df07/go-progressive-raytracer/pkg/core"
-	"github.com/df07/go-progressive-raytracer/pkg/geometry"
 	"github.com/df07/go-progressive-raytracer/pkg/integrator"
-	"github.com/df07/go-progressive-raytracer/pkg/material"
 	"github.com/df07/go-progressive-raytracer/pkg/renderer"
 	"github.com/df07/go-progressive-raytracer/pkg/scene"
 	"github.com/df07/scene-llm/agent"
@@ -24,9 +21,8 @@ import (
 
 // ChatSession represents an ongoing conversation
 type ChatSession struct {
-	ID       string            `json:"id"`
-	Messages []*genai.Content  `json:"messages"`
-	Scene    *agent.SceneState `json:"scene"`
+	ID       string           `json:"id"`
+	Messages []*genai.Content `json:"messages"`
 }
 
 // ChatMessage represents a chat message request
@@ -69,13 +65,6 @@ func (s *Server) getOrCreateSession(sessionID string) *ChatSession {
 		session = &ChatSession{
 			ID:       sessionID,
 			Messages: []*genai.Content{},
-			Scene: &agent.SceneState{
-				Shapes: []agent.ShapeRequest{},
-				Camera: agent.CameraInfo{
-					Position: [3]float64{0, 0, 5},
-					LookAt:   [3]float64{0, 0, 0},
-				},
-			},
 		}
 		s.sessions[sessionID] = session
 	}
@@ -237,9 +226,8 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	s.addSSEClient(sessionID, clientChan)
 	defer s.removeSSEClient(sessionID, clientChan)
 
-	// Send current scene state immediately
-	s.sendSSEEvent(w, "scene_state", map[string]interface{}{
-		"scene":         session.Scene,
+	// Send initial connection state
+	s.sendSSEEvent(w, "connection_state", map[string]interface{}{
 		"message_count": len(session.Messages),
 	})
 
@@ -275,12 +263,10 @@ func (s *Server) processMessage(session *ChatSession, message string) {
 	}
 	defer ag.Close()
 
-	// Build scene context
-	sceneContext := s.buildSceneContext(session.Scene)
-
 	// Start agent processing in goroutine
+	// Note: Agent now manages its own scene state internally
 	go func() {
-		if err := ag.ProcessMessage(context.Background(), session.Messages, sceneContext); err != nil {
+		if err := ag.ProcessMessage(context.Background(), session.Messages); err != nil {
 			agentEvents <- agent.NewErrorEvent(err)
 		}
 		close(agentEvents)
@@ -302,25 +288,9 @@ func (s *Server) processMessage(session *ChatSession, message string) {
 			// Broadcast the response
 			s.broadcastToSession(session.ID, SSEChatEvent{Type: e.EventType(), Data: e.Text})
 
-		case agent.ToolCallEvent:
-			// Handle function calls - update scene and render
-			// Update scene with function calls
-			s.mutex.Lock()
-			session.Scene.Shapes = append(session.Scene.Shapes, e.Shapes...)
-			// Update camera to look at the first shape with proper distance
-			if len(e.Shapes) > 0 {
-				firstShape := e.Shapes[0]
-				cameraDistance := firstShape.Size*3 + 5
-				session.Scene.Camera.Position = [3]float64{firstShape.Position[0], firstShape.Position[1], firstShape.Position[2] + cameraDistance}
-				session.Scene.Camera.LookAt = firstShape.Position
-			}
-			s.mutex.Unlock()
-
-			// Broadcast function calls
-			s.broadcastToSession(session.ID, SSEChatEvent{Type: e.EventType(), Data: e.Shapes})
-
-			// Render updated scene
-			s.renderAndBroadcastScene(session)
+		case agent.SceneRenderEvent:
+			// Handle ready-to-render scene from agent
+			s.renderAndBroadcastScene(session.ID, e.RaytracerScene)
 
 		case agent.ThinkingEvent:
 			s.broadcastToSession(session.ID, SSEChatEvent{Type: e.EventType(), Data: e.Message})
@@ -328,8 +298,6 @@ func (s *Server) processMessage(session *ChatSession, message string) {
 			s.broadcastToSession(session.ID, SSEChatEvent{Type: e.EventType(), Data: e.Message})
 		case agent.CompleteEvent:
 			s.broadcastToSession(session.ID, SSEChatEvent{Type: e.EventType(), Data: e.Message})
-		case agent.SceneUpdateEvent:
-			s.broadcastToSession(session.ID, SSEChatEvent{Type: e.EventType(), Data: e.Scene})
 		default:
 			// Fallback for any unhandled event types
 			s.broadcastToSession(session.ID, SSEChatEvent{Type: "unknown", Data: "Unknown event type"})
@@ -337,33 +305,11 @@ func (s *Server) processMessage(session *ChatSession, message string) {
 	}
 }
 
-// buildSceneContext creates a context string describing the current scene state
-func (s *Server) buildSceneContext(scene *agent.SceneState) string {
-	sceneContext := "Current scene state: "
-	if len(scene.Shapes) == 0 {
-		sceneContext += "empty scene with no objects."
-	} else {
-		sceneContext += fmt.Sprintf("%d shapes: ", len(scene.Shapes))
-		for i, shape := range scene.Shapes {
-			sceneContext += fmt.Sprintf("%d) %s at [%.1f,%.1f,%.1f] size %.1f color [%.1f,%.1f,%.1f]",
-				i+1, shape.Type, shape.Position[0], shape.Position[1], shape.Position[2],
-				shape.Size, shape.Color[0], shape.Color[1], shape.Color[2])
-			if i < len(scene.Shapes)-1 {
-				sceneContext += ", "
-			}
-		}
-	}
-	return sceneContext
-}
-
-// renderAndBroadcastScene renders the current scene and broadcasts to SSE clients
-func (s *Server) renderAndBroadcastScene(session *ChatSession) {
-	if len(session.Scene.Shapes) == 0 {
+// renderAndBroadcastScene renders a raytracer scene and broadcasts to a specific session
+func (s *Server) renderAndBroadcastScene(sessionID string, raytracerScene *scene.Scene) {
+	if len(raytracerScene.Shapes) == 0 {
 		return // No shapes to render
 	}
-
-	// Create a complete scene with all shapes
-	sceneWithShapes := s.createSceneWithShapes(session.Scene.Shapes)
 
 	// Render the scene
 	config := renderer.DefaultProgressiveConfig()
@@ -371,111 +317,41 @@ func (s *Server) renderAndBroadcastScene(session *ChatSession) {
 	config.MaxPasses = 3
 
 	logger := renderer.NewDefaultLogger()
-	integrator := integrator.NewPathTracingIntegrator(sceneWithShapes.SamplingConfig)
+	integrator := integrator.NewPathTracingIntegrator(raytracerScene.SamplingConfig)
 
-	raytracer, err := renderer.NewProgressiveRaytracer(sceneWithShapes, config, integrator, logger)
+	raytracer, err := renderer.NewProgressiveRaytracer(raytracerScene, config, integrator, logger)
 	if err != nil {
-		log.Printf("Failed to create raytracer for session %s: %v", session.ID, err)
+		log.Printf("Failed to create raytracer for session %s: %v", sessionID, err)
 		return
 	}
 
 	// Render
 	result_img, _, err := raytracer.RenderPass(1, nil)
 	if err != nil {
-		log.Printf("Failed to render for session %s: %v", session.ID, err)
+		log.Printf("Failed to render for session %s: %v", sessionID, err)
 		return
 	}
 
 	// Encode image to base64
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, result_img); err != nil {
-		log.Printf("Failed to encode image for session %s: %v", session.ID, err)
+		log.Printf("Failed to encode image for session %s: %v", sessionID, err)
 		return
 	}
 
 	imageBase64 := base64.StdEncoding.EncodeToString(buf.Bytes())
 
+	// Extract basic scene info for frontend (simplified representation)
+	sceneInfo := map[string]interface{}{
+		"shape_count":  len(raytracerScene.Shapes),
+		"image_base64": imageBase64,
+	}
+
 	// Broadcast scene update with image
-	s.broadcastToSession(session.ID, SSEChatEvent{
+	s.broadcastToSession(sessionID, SSEChatEvent{
 		Type: "scene_update",
-		Data: map[string]interface{}{
-			"scene":        session.Scene,
-			"image_base64": imageBase64,
-		},
+		Data: sceneInfo,
 	})
 
-	log.Printf("Scene rendered for session %s - %d shapes", session.ID, len(session.Scene.Shapes))
-}
-
-// createSceneWithShapes builds a complete scene with all shapes plus defaults
-func (s *Server) createSceneWithShapes(shapes []agent.ShapeRequest) *scene.Scene {
-	// Scene configuration
-	samplingConfig := scene.SamplingConfig{
-		Width:                     400,
-		Height:                    300,
-		SamplesPerPixel:           10,
-		MaxDepth:                  8,
-		RussianRouletteMinBounces: 3,
-		AdaptiveMinSamples:        0.1,
-		AdaptiveThreshold:         0.05,
-	}
-
-	// Camera (will be updated based on shapes)
-	cameraConfig := geometry.CameraConfig{
-		Center:        core.NewVec3(0, 0, 5),
-		LookAt:        core.NewVec3(0, 0, 0),
-		Up:            core.NewVec3(0, 1, 0),
-		VFov:          45.0,
-		Width:         samplingConfig.Width,
-		AspectRatio:   float64(samplingConfig.Width) / float64(samplingConfig.Height),
-		Aperture:      0.0,
-		FocusDistance: 0.0,
-	}
-	camera := geometry.NewCamera(cameraConfig)
-
-	// Create shapes
-	var sceneShapes []geometry.Shape
-	for _, shapeReq := range shapes {
-		// Create material with requested color
-		shapeMaterial := material.NewLambertian(core.NewVec3(shapeReq.Color[0], shapeReq.Color[1], shapeReq.Color[2]))
-
-		// Create geometry based on type
-		var shape geometry.Shape
-		switch shapeReq.Type {
-		case "sphere":
-			shape = geometry.NewSphere(
-				core.NewVec3(shapeReq.Position[0], shapeReq.Position[1], shapeReq.Position[2]),
-				shapeReq.Size,
-				shapeMaterial,
-			)
-		case "box":
-			// Create a simple cube using a sphere for now (since Box constructor seems different)
-			shape = geometry.NewSphere(
-				core.NewVec3(shapeReq.Position[0], shapeReq.Position[1], shapeReq.Position[2]),
-				shapeReq.Size/2, // Use half size for radius
-				shapeMaterial,
-			)
-		default:
-			// Default to sphere
-			shape = geometry.NewSphere(
-				core.NewVec3(shapeReq.Position[0], shapeReq.Position[1], shapeReq.Position[2]),
-				shapeReq.Size,
-				shapeMaterial,
-			)
-		}
-		sceneShapes = append(sceneShapes, shape)
-	}
-
-	// Create scene
-	sceneWithShapes := &scene.Scene{
-		Camera:         camera,
-		Shapes:         sceneShapes,
-		SamplingConfig: samplingConfig,
-		CameraConfig:   cameraConfig,
-	}
-
-	// Add default lighting
-	sceneWithShapes.AddUniformInfiniteLight(core.NewVec3(0.5, 0.7, 1.0))
-
-	return sceneWithShapes
+	log.Printf("Scene rendered for session %s - %d shapes", sessionID, len(raytracerScene.Shapes))
 }

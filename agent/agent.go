@@ -11,8 +11,9 @@ import (
 
 // Agent handles LLM conversations and tool execution
 type Agent struct {
-	client *genai.Client
-	events chan<- AgentEvent
+	client       *genai.Client
+	events       chan<- AgentEvent
+	sceneManager *SceneManager
 }
 
 // New creates a new agent that will send events to the provided channel
@@ -31,15 +32,19 @@ func New(events chan<- AgentEvent) (*Agent, error) {
 	}
 
 	return &Agent{
-		client: client,
-		events: events,
+		client:       client,
+		events:       events,
+		sceneManager: NewSceneManager(),
 	}, nil
 }
 
 // ProcessMessage handles a conversation turn and emits events
-func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Content, sceneContext string) error {
+func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Content) error {
 	// Send thinking event
 	a.events <- NewThinkingEvent("🤖 Processing your request...")
+
+	// Build scene context from our internal scene manager
+	sceneContext := a.sceneManager.BuildContext()
 
 	// Add scene context to the latest message
 	contextualizedConversation := a.addSceneContext(conversation, sceneContext)
@@ -87,9 +92,18 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Conten
 		a.events <- NewResponseEvent(textResponse)
 	}
 
-	// Emit function calls if we have any
+	// Apply function calls to scene manager and emit scene update
 	if len(functionCalls) > 0 {
-		a.events <- NewToolCallEvent(functionCalls)
+		// Add shapes to scene manager
+		err := a.sceneManager.AddShapes(functionCalls)
+		if err != nil {
+			a.events <- NewErrorEvent(fmt.Errorf("failed to add shapes to scene: %w", err))
+			return err
+		}
+
+		// Convert to raytracer scene and emit render event
+		raytracerScene := a.sceneManager.ToRaytracerScene()
+		a.events <- NewSceneRenderEvent(raytracerScene)
 	}
 
 	// Send completion event

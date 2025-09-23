@@ -1,5 +1,7 @@
 package agent
 
+import "github.com/df07/go-progressive-raytracer/pkg/scene"
+
 // AgentEvent is the interface that all agent events implement
 type AgentEvent interface {
 	EventType() string
@@ -30,6 +32,12 @@ type SceneUpdateEvent struct {
 
 func (e SceneUpdateEvent) EventType() string { return "scene_update" }
 
+type SceneRenderEvent struct {
+	RaytracerScene *scene.Scene `json:"-"` // Ready-to-render scene, not serialized
+}
+
+func (e SceneRenderEvent) EventType() string { return "scene_render" }
+
 type ErrorEvent struct {
 	Message string `json:"message"`
 }
@@ -57,6 +65,10 @@ func NewToolCallEvent(shapes []ShapeRequest) ToolCallEvent {
 
 func NewSceneUpdateEvent(scene *SceneState) SceneUpdateEvent {
 	return SceneUpdateEvent{Scene: scene}
+}
+
+func NewSceneRenderEvent(raytracerScene *scene.Scene) SceneRenderEvent {
+	return SceneRenderEvent{RaytracerScene: raytracerScene}
 }
 
 func NewErrorEvent(err error) ErrorEvent {
