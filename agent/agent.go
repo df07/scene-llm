@@ -38,6 +38,11 @@ func New(events chan<- AgentEvent) (*Agent, error) {
 	}, nil
 }
 
+// SetEventsChannel sets the events channel for this agent
+func (a *Agent) SetEventsChannel(events chan<- AgentEvent) {
+	a.events = events
+}
+
 // ProcessMessage handles a conversation turn and emits events
 func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Content) error {
 	// Send thinking event
@@ -70,14 +75,37 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Conten
 	}
 
 	var textResponse string
-	var functionCalls []ShapeRequest
+	var createShapes []ShapeRequest
+	var hasShapeOperations bool
 
 	// Process all parts of the response
 	for _, part := range result.Candidates[0].Content.Parts {
 		// Handle function calls
 		if part.FunctionCall != nil {
-			if shape := parseShapeFromFunctionCall(part.FunctionCall); shape != nil {
-				functionCalls = append(functionCalls, *shape)
+			switch part.FunctionCall.Name {
+			case "create_shape":
+				if shape := parseShapeFromFunctionCall(part.FunctionCall); shape != nil {
+					createShapes = append(createShapes, *shape)
+					hasShapeOperations = true
+				}
+			case "update_shape":
+				if update := parseUpdateFromFunctionCall(part.FunctionCall); update != nil {
+					err := a.sceneManager.UpdateShape(update.ID, update.Updates)
+					if err != nil {
+						a.events <- NewErrorEvent(err)
+						return err
+					}
+					hasShapeOperations = true
+				}
+			case "remove_shape":
+				if id := parseRemoveFromFunctionCall(part.FunctionCall); id != "" {
+					err := a.sceneManager.RemoveShape(id)
+					if err != nil {
+						a.events <- NewErrorEvent(err)
+						return err
+					}
+					hasShapeOperations = true
+				}
 			}
 		}
 
@@ -92,13 +120,15 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Conten
 		a.events <- NewResponseEvent(textResponse)
 	}
 
-	// Apply function calls to scene manager and emit scene update
-	if len(functionCalls) > 0 {
-		// Add shapes to scene manager
-		err := a.sceneManager.AddShapes(functionCalls)
-		if err != nil {
-			a.events <- NewErrorEvent(fmt.Errorf("failed to add shapes to scene: %w", err))
-			return err
+	// Apply shape operations to scene manager and emit scene update
+	if len(createShapes) > 0 || hasShapeOperations {
+		// Add new shapes to scene manager if any
+		if len(createShapes) > 0 {
+			err := a.sceneManager.AddShapes(createShapes)
+			if err != nil {
+				a.events <- NewErrorEvent(fmt.Errorf("failed to add shapes to scene: %w", err))
+				return err
+			}
 		}
 
 		// Convert to raytracer scene and emit render event

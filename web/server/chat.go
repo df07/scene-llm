@@ -19,10 +19,11 @@ import (
 	"google.golang.org/genai"
 )
 
-// ChatSession represents an ongoing conversation
+// ChatSession represents an ongoing conversation with persistent agent state
 type ChatSession struct {
 	ID       string           `json:"id"`
 	Messages []*genai.Content `json:"messages"`
+	Agent    *agent.Agent     `json:"-"` // Agent with persistent SceneManager
 }
 
 // ChatMessage represents a chat message request
@@ -62,9 +63,17 @@ func (s *Server) getOrCreateSession(sessionID string) *ChatSession {
 
 	session, exists := s.sessions[sessionID]
 	if !exists {
+		// Create agent for this session (this will create a persistent SceneManager)
+		ag, err := agent.New(nil) // We'll set the events channel later per message
+		if err != nil {
+			log.Printf("Failed to create agent for session %s: %v", sessionID, err)
+			return nil
+		}
+
 		session = &ChatSession{
 			ID:       sessionID,
 			Messages: []*genai.Content{},
+			Agent:    ag,
 		}
 		s.sessions[sessionID] = session
 	}
@@ -255,16 +264,18 @@ func (s *Server) processMessage(session *ChatSession, message string) {
 	// Create channel for agent events
 	agentEvents := make(chan agent.AgentEvent, 10)
 
-	// Create agent
-	ag, err := agent.New(agentEvents)
-	if err != nil {
-		s.broadcastToSession(session.ID, SSEChatEvent{Type: "error", Data: err.Error()})
+	// Use the persistent agent from the session
+	ag := session.Agent
+	if ag == nil {
+		s.broadcastToSession(session.ID, SSEChatEvent{Type: "error", Data: "Session agent not initialized"})
 		return
 	}
-	defer ag.Close()
+
+	// Set the events channel for this message processing
+	ag.SetEventsChannel(agentEvents)
 
 	// Start agent processing in goroutine
-	// Note: Agent now manages its own scene state internally
+	// Note: Agent maintains its scene state across messages
 	go func() {
 		if err := ag.ProcessMessage(context.Background(), session.Messages); err != nil {
 			agentEvents <- agent.NewErrorEvent(err)

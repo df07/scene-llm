@@ -35,16 +35,22 @@ func TestAddShapes(t *testing.T) {
 
 	shapes := []ShapeRequest{
 		{
-			Type:     "sphere",
-			Position: [3]float64{1, 2, 3},
-			Size:     2.0,
-			Color:    [3]float64{1.0, 0.0, 0.0},
+			ID:   "red_sphere",
+			Type: "sphere",
+			Properties: map[string]interface{}{
+				"position": []interface{}{1.0, 2.0, 3.0},
+				"radius":   2.0,
+				"color":    []interface{}{1.0, 0.0, 0.0},
+			},
 		},
 		{
-			Type:     "box",
-			Position: [3]float64{4, 5, 6},
-			Size:     1.5,
-			Color:    [3]float64{0.0, 1.0, 0.0},
+			ID:   "green_box",
+			Type: "box",
+			Properties: map[string]interface{}{
+				"position":   []interface{}{4.0, 5.0, 6.0},
+				"dimensions": []interface{}{1.5, 1.5, 1.5},
+				"color":      []interface{}{0.0, 1.0, 0.0},
+			},
 		},
 	}
 
@@ -59,10 +65,11 @@ func TestAddShapes(t *testing.T) {
 	}
 
 	// Check that shapes were added correctly
-	for i, expectedShape := range shapes {
-		if state.Shapes[i] != expectedShape {
-			t.Errorf("Shape %d: expected %+v, got %+v", i, expectedShape, state.Shapes[i])
-		}
+	if state.Shapes[0].ID != "red_sphere" || state.Shapes[0].Type != "sphere" {
+		t.Errorf("First shape not added correctly: %+v", state.Shapes[0])
+	}
+	if state.Shapes[1].ID != "green_box" || state.Shapes[1].Type != "box" {
+		t.Errorf("Second shape not added correctly: %+v", state.Shapes[1])
 	}
 }
 
@@ -70,10 +77,13 @@ func TestAddShapesUpdatesCamera(t *testing.T) {
 	sm := NewSceneManager()
 
 	shape := ShapeRequest{
-		Type:     "sphere",
-		Position: [3]float64{10, 20, 30},
-		Size:     5.0,
-		Color:    [3]float64{1.0, 0.0, 0.0},
+		ID:   "test_sphere",
+		Type: "sphere",
+		Properties: map[string]interface{}{
+			"position": []interface{}{10.0, 20.0, 30.0},
+			"radius":   5.0,
+			"color":    []interface{}{1.0, 0.0, 0.0},
+		},
 	}
 
 	err := sm.AddShapes([]ShapeRequest{shape})
@@ -84,10 +94,10 @@ func TestAddShapesUpdatesCamera(t *testing.T) {
 	state := sm.GetState()
 
 	// Camera should be positioned relative to the first shape
-	// expectedDistance := shape.Size*3 + 5 = 5.0*3 + 5 = 20
+	// expectedDistance := radius*3 + 5 = 5.0*3 + 5 = 20
 	expectedCamera := CameraInfo{
-		Position: [3]float64{10, 20, 50}, // shape.Position[2] + 20
-		LookAt:   [3]float64{10, 20, 30}, // shape.Position
+		Position: [3]float64{10, 20, 50}, // shape position Z + 20
+		LookAt:   [3]float64{10, 20, 30}, // shape position
 	}
 
 	if state.Camera != expectedCamera {
@@ -124,16 +134,22 @@ func TestBuildContextWithShapes(t *testing.T) {
 
 	shapes := []ShapeRequest{
 		{
-			Type:     "sphere",
-			Position: [3]float64{1.5, 2.7, 3.2},
-			Size:     2.5,
-			Color:    [3]float64{0.8, 0.2, 0.4},
+			ID:   "test_sphere",
+			Type: "sphere",
+			Properties: map[string]interface{}{
+				"position": []interface{}{1.5, 2.7, 3.2},
+				"radius":   2.5,
+				"color":    []interface{}{0.8, 0.2, 0.4},
+			},
 		},
 		{
-			Type:     "box",
-			Position: [3]float64{-1.0, 0.0, 1.0},
-			Size:     1.0,
-			Color:    [3]float64{0.0, 1.0, 0.5},
+			ID:   "test_box",
+			Type: "box",
+			Properties: map[string]interface{}{
+				"position":   []interface{}{-1.0, 0.0, 1.0},
+				"dimensions": []interface{}{1.0, 1.0, 1.0},
+				"color":      []interface{}{0.0, 1.0, 0.5},
+			},
 		},
 	}
 
@@ -145,12 +161,12 @@ func TestBuildContextWithShapes(t *testing.T) {
 		t.Errorf("Context should contain '2 shapes', got: %s", context)
 	}
 
-	if !strings.Contains(context, "sphere at [1.5,2.7,3.2]") {
-		t.Errorf("Context should contain sphere info, got: %s", context)
+	if !strings.Contains(context, "sphere (ID: test_sphere) at [1.5,2.7,3.2]") {
+		t.Errorf("Context should contain sphere info with ID, got: %s", context)
 	}
 
-	if !strings.Contains(context, "box at [-1.0,0.0,1.0]") {
-		t.Errorf("Context should contain box info, got: %s", context)
+	if !strings.Contains(context, "box (ID: test_box) at [-1.0,0.0,1.0]") {
+		t.Errorf("Context should contain box info with ID, got: %s", context)
 	}
 
 	if !strings.Contains(context, "size 2.5") {
@@ -163,7 +179,15 @@ func TestClearScene(t *testing.T) {
 
 	// Add some shapes first
 	shapes := []ShapeRequest{
-		{Type: "sphere", Position: [3]float64{1, 2, 3}, Size: 1.0, Color: [3]float64{1, 0, 0}},
+		{
+			ID:   "test_sphere",
+			Type: "sphere",
+			Properties: map[string]interface{}{
+				"position": []interface{}{1.0, 2.0, 3.0},
+				"radius":   1.0,
+				"color":    []interface{}{1.0, 0.0, 0.0},
+			},
+		},
 	}
 	sm.AddShapes(shapes)
 
@@ -194,10 +218,13 @@ func TestGetStateReturnsImmutableCopy(t *testing.T) {
 
 	// Add a shape
 	shape := ShapeRequest{
-		Type:     "sphere",
-		Position: [3]float64{1, 2, 3},
-		Size:     1.0,
-		Color:    [3]float64{1, 0, 0},
+		ID:   "test_sphere",
+		Type: "sphere",
+		Properties: map[string]interface{}{
+			"position": []interface{}{1.0, 2.0, 3.0},
+			"radius":   1.0,
+			"color":    []interface{}{1.0, 0.0, 0.0},
+		},
 	}
 	sm.AddShapes([]ShapeRequest{shape})
 
@@ -205,16 +232,19 @@ func TestGetStateReturnsImmutableCopy(t *testing.T) {
 	state1 := sm.GetState()
 	state2 := sm.GetState()
 
-	// Modify first state
-	state1.Shapes[0].Size = 999.0
+	// Modify first state's properties
+	if state1.Shapes[0].Properties != nil {
+		state1.Shapes[0].Properties["radius"] = 999.0
+	}
 
 	// Second state should be unaffected
-	if state2.Shapes[0].Size != 1.0 {
+	if radius, ok := state2.Shapes[0].Properties["radius"].(float64); !ok || radius != 1.0 {
 		t.Errorf("GetState() should return independent copies, but modification affected other copy")
 	}
 
 	// Original scene should be unaffected
-	if sm.GetState().Shapes[0].Size != 1.0 {
+	originalState := sm.GetState()
+	if radius, ok := originalState.Shapes[0].Properties["radius"].(float64); !ok || radius != 1.0 {
 		t.Errorf("GetState() should return copies, but modification affected original scene")
 	}
 }
@@ -227,9 +257,33 @@ func TestGetShapeCount(t *testing.T) {
 	}
 
 	shapes := []ShapeRequest{
-		{Type: "sphere", Position: [3]float64{0, 0, 0}, Size: 1.0, Color: [3]float64{1, 0, 0}},
-		{Type: "box", Position: [3]float64{1, 1, 1}, Size: 2.0, Color: [3]float64{0, 1, 0}},
-		{Type: "sphere", Position: [3]float64{2, 2, 2}, Size: 1.5, Color: [3]float64{0, 0, 1}},
+		{
+			ID:   "sphere1",
+			Type: "sphere",
+			Properties: map[string]interface{}{
+				"position": []interface{}{0.0, 0.0, 0.0},
+				"radius":   1.0,
+				"color":    []interface{}{1.0, 0.0, 0.0},
+			},
+		},
+		{
+			ID:   "box1",
+			Type: "box",
+			Properties: map[string]interface{}{
+				"position":   []interface{}{1.0, 1.0, 1.0},
+				"dimensions": []interface{}{2.0, 2.0, 2.0},
+				"color":      []interface{}{0.0, 1.0, 0.0},
+			},
+		},
+		{
+			ID:   "sphere2",
+			Type: "sphere",
+			Properties: map[string]interface{}{
+				"position": []interface{}{2.0, 2.0, 2.0},
+				"radius":   1.5,
+				"color":    []interface{}{0.0, 0.0, 1.0},
+			},
+		},
 	}
 
 	sm.AddShapes(shapes)
@@ -243,4 +297,453 @@ func TestGetShapeCount(t *testing.T) {
 	if sm.GetShapeCount() != 0 {
 		t.Errorf("Expected 0 shapes after clear, got %d", sm.GetShapeCount())
 	}
+}
+
+// Tests for new transformation features
+
+func TestFindShape(t *testing.T) {
+	sm := NewSceneManager()
+
+	shapes := []ShapeRequest{
+		{
+			ID:   "blue_sphere",
+			Type: "sphere",
+			Properties: map[string]interface{}{
+				"position": []interface{}{0.0, 0.0, 0.0},
+				"radius":   1.0,
+				"color":    []interface{}{0.0, 0.0, 1.0},
+			},
+		},
+		{
+			ID:   "red_box",
+			Type: "box",
+			Properties: map[string]interface{}{
+				"position":   []interface{}{1.0, 1.0, 1.0},
+				"dimensions": []interface{}{2.0, 2.0, 2.0},
+				"color":      []interface{}{1.0, 0.0, 0.0},
+			},
+		},
+	}
+
+	sm.AddShapes(shapes)
+
+	// Test finding existing shapes
+	foundSphere := sm.FindShape("blue_sphere")
+	if foundSphere == nil {
+		t.Error("Expected to find blue_sphere, got nil")
+	} else if foundSphere.ID != "blue_sphere" || foundSphere.Type != "sphere" {
+		t.Errorf("Found wrong shape: %+v", foundSphere)
+	}
+
+	foundBox := sm.FindShape("red_box")
+	if foundBox == nil {
+		t.Error("Expected to find red_box, got nil")
+	} else if foundBox.ID != "red_box" || foundBox.Type != "box" {
+		t.Errorf("Found wrong shape: %+v", foundBox)
+	}
+
+	// Test finding non-existent shape
+	notFound := sm.FindShape("nonexistent")
+	if notFound != nil {
+		t.Errorf("Expected nil for non-existent shape, got %+v", notFound)
+	}
+}
+
+func TestUpdateShape(t *testing.T) {
+	sm := NewSceneManager()
+
+	// Add initial shape
+	shape := ShapeRequest{
+		ID:   "blue_sphere",
+		Type: "sphere",
+		Properties: map[string]interface{}{
+			"position": []interface{}{0.0, 0.0, 0.0},
+			"radius":   1.0,
+			"color":    []interface{}{0.0, 0.0, 1.0},
+		},
+	}
+	sm.AddShapes([]ShapeRequest{shape})
+
+	// Test updating color
+	err := sm.UpdateShape("blue_sphere", map[string]interface{}{
+		"properties": map[string]interface{}{
+			"color": []interface{}{1.0, 0.0, 1.0}, // Change to purple
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdateShape failed: %v", err)
+	}
+
+	// Verify color was updated
+	updated := sm.FindShape("blue_sphere")
+	if updated == nil {
+		t.Fatal("Shape disappeared after update")
+	}
+	if color, ok := updated.Properties["color"].([]interface{}); !ok || len(color) != 3 ||
+		color[0].(float64) != 1.0 || color[1].(float64) != 0.0 || color[2].(float64) != 1.0 {
+		t.Errorf("Color not updated correctly: %+v", updated.Properties["color"])
+	}
+
+	// Test updating ID (renaming)
+	err = sm.UpdateShape("blue_sphere", map[string]interface{}{
+		"id": "purple_sphere",
+	})
+	if err != nil {
+		t.Fatalf("UpdateShape ID change failed: %v", err)
+	}
+
+	// Verify ID was updated and old ID no longer exists
+	if sm.FindShape("blue_sphere") != nil {
+		t.Error("Old ID still exists after rename")
+	}
+	renamed := sm.FindShape("purple_sphere")
+	if renamed == nil {
+		t.Error("New ID not found after rename")
+	}
+
+	// Test updating non-existent shape
+	err = sm.UpdateShape("nonexistent", map[string]interface{}{
+		"properties": map[string]interface{}{
+			"color": []interface{}{1.0, 1.0, 1.0},
+		},
+	})
+	if err == nil {
+		t.Error("Expected error when updating non-existent shape")
+	}
+
+	// Test ID conflict
+	sm.AddShapes([]ShapeRequest{{
+		ID:   "another_shape",
+		Type: "box",
+		Properties: map[string]interface{}{
+			"position":   []interface{}{2.0, 2.0, 2.0},
+			"dimensions": []interface{}{1.0, 1.0, 1.0},
+		},
+	}})
+
+	err = sm.UpdateShape("purple_sphere", map[string]interface{}{
+		"id": "another_shape", // Try to rename to existing ID
+	})
+	if err == nil {
+		t.Error("Expected error when trying to rename to existing ID")
+	}
+}
+
+func TestRemoveShape(t *testing.T) {
+	// Set up initial shapes
+	initialShapes := []ShapeRequest{
+		{
+			ID:   "shape1",
+			Type: "sphere",
+			Properties: map[string]interface{}{
+				"position": []interface{}{0.0, 0.0, 0.0},
+				"radius":   1.0,
+			},
+		},
+		{
+			ID:   "shape2",
+			Type: "box",
+			Properties: map[string]interface{}{
+				"position":   []interface{}{1.0, 1.0, 1.0},
+				"dimensions": []interface{}{1.0, 1.0, 1.0},
+			},
+		},
+		{
+			ID:   "shape3",
+			Type: "sphere",
+			Properties: map[string]interface{}{
+				"position": []interface{}{2.0, 2.0, 2.0},
+				"radius":   0.5,
+			},
+		},
+	}
+
+	tests := []struct {
+		name             string
+		removeID         string
+		shouldError      bool
+		expectedCount    int
+		shouldStillExist []string
+		shouldNotExist   []string
+	}{
+		{
+			name:             "remove middle shape",
+			removeID:         "shape2",
+			shouldError:      false,
+			expectedCount:    2,
+			shouldStillExist: []string{"shape1", "shape3"},
+			shouldNotExist:   []string{"shape2"},
+		},
+		{
+			name:             "remove non-existent shape",
+			removeID:         "nonexistent",
+			shouldError:      true,
+			expectedCount:    3, // Should remain unchanged
+			shouldStillExist: []string{"shape1", "shape2", "shape3"},
+			shouldNotExist:   []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sm := NewSceneManager()
+			sm.AddShapes(initialShapes)
+
+			if sm.GetShapeCount() != 3 {
+				t.Fatalf("Expected 3 shapes initially, got %d", sm.GetShapeCount())
+			}
+
+			err := sm.RemoveShape(tt.removeID)
+
+			if tt.shouldError && err == nil {
+				t.Errorf("Expected error for %s, but got none", tt.name)
+			} else if !tt.shouldError && err != nil {
+				t.Errorf("Unexpected error for %s: %v", tt.name, err)
+			}
+
+			if sm.GetShapeCount() != tt.expectedCount {
+				t.Errorf("Expected %d shapes after %s, got %d", tt.expectedCount, tt.name, sm.GetShapeCount())
+			}
+
+			// Verify shapes that should still exist
+			for _, id := range tt.shouldStillExist {
+				if sm.FindShape(id) == nil {
+					t.Errorf("Shape %s should still exist after %s", id, tt.name)
+				}
+			}
+
+			// Verify shapes that should not exist
+			for _, id := range tt.shouldNotExist {
+				if sm.FindShape(id) != nil {
+					t.Errorf("Shape %s should not exist after %s", id, tt.name)
+				}
+			}
+		})
+	}
+
+	// Test sequential removal
+	t.Run("sequential removal", func(t *testing.T) {
+		sm := NewSceneManager()
+		sm.AddShapes(initialShapes)
+
+		// Remove shapes in sequence: shape1, then shape3
+		removeOrder := []string{"shape1", "shape3"}
+		expectedCounts := []int{2, 1}
+
+		for i, id := range removeOrder {
+			err := sm.RemoveShape(id)
+			if err != nil {
+				t.Fatalf("Failed to remove %s: %v", id, err)
+			}
+
+			if sm.GetShapeCount() != expectedCounts[i] {
+				t.Errorf("Expected %d shapes after removing %s, got %d", expectedCounts[i], id, sm.GetShapeCount())
+			}
+
+			if sm.FindShape(id) != nil {
+				t.Errorf("Shape %s should be removed", id)
+			}
+		}
+	})
+}
+
+// Tests for shape validation using table-driven tests
+
+func TestValidateShapeProperties(t *testing.T) {
+	tests := []struct {
+		name        string
+		shape       ShapeRequest
+		shouldError bool
+	}{
+		{
+			name: "valid sphere",
+			shape: ShapeRequest{
+				ID:   "valid_sphere",
+				Type: "sphere",
+				Properties: map[string]interface{}{
+					"position": []interface{}{0.0, 1.0, 2.0},
+					"radius":   1.5,
+					"color":    []interface{}{0.8, 0.2, 0.4},
+				},
+			},
+			shouldError: false,
+		},
+		{
+			name: "valid box",
+			shape: ShapeRequest{
+				ID:   "valid_box",
+				Type: "box",
+				Properties: map[string]interface{}{
+					"position":   []interface{}{1.0, 2.0, 3.0},
+					"dimensions": []interface{}{2.0, 1.5, 3.0},
+					"color":      []interface{}{0.1, 0.9, 0.3},
+				},
+			},
+			shouldError: false,
+		},
+		{
+			name: "empty ID",
+			shape: ShapeRequest{
+				ID:   "",
+				Type: "sphere",
+				Properties: map[string]interface{}{
+					"position": []interface{}{0.0, 0.0, 0.0},
+					"radius":   1.0,
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name: "empty type",
+			shape: ShapeRequest{
+				ID:   "test_shape",
+				Type: "",
+				Properties: map[string]interface{}{
+					"position": []interface{}{0.0, 0.0, 0.0},
+					"radius":   1.0,
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name: "nil properties",
+			shape: ShapeRequest{
+				ID:         "test_shape",
+				Type:       "sphere",
+				Properties: nil,
+			},
+			shouldError: true,
+		},
+		{
+			name: "unsupported shape type",
+			shape: ShapeRequest{
+				ID:   "triangle",
+				Type: "triangle",
+				Properties: map[string]interface{}{
+					"position": []interface{}{0.0, 0.0, 0.0},
+					"vertices": []interface{}{},
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name: "sphere without radius",
+			shape: ShapeRequest{
+				ID:   "incomplete_sphere",
+				Type: "sphere",
+				Properties: map[string]interface{}{
+					"position": []interface{}{0.0, 0.0, 0.0},
+					"color":    []interface{}{1.0, 0.0, 0.0},
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name: "sphere without position",
+			shape: ShapeRequest{
+				ID:   "incomplete_sphere2",
+				Type: "sphere",
+				Properties: map[string]interface{}{
+					"radius": 1.0,
+					"color":  []interface{}{1.0, 0.0, 0.0},
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name: "box without dimensions",
+			shape: ShapeRequest{
+				ID:   "incomplete_box",
+				Type: "box",
+				Properties: map[string]interface{}{
+					"position": []interface{}{0.0, 0.0, 0.0},
+					"color":    []interface{}{1.0, 0.0, 0.0},
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name: "invalid position format",
+			shape: ShapeRequest{
+				ID:   "bad_position",
+				Type: "sphere",
+				Properties: map[string]interface{}{
+					"position": []interface{}{0.0, "invalid"}, // Wrong type and count
+					"radius":   1.0,
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name: "negative radius",
+			shape: ShapeRequest{
+				ID:   "negative_sphere",
+				Type: "sphere",
+				Properties: map[string]interface{}{
+					"position": []interface{}{0.0, 0.0, 0.0},
+					"radius":   -1.0,
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name: "invalid color range",
+			shape: ShapeRequest{
+				ID:   "bad_color",
+				Type: "sphere",
+				Properties: map[string]interface{}{
+					"position": []interface{}{0.0, 0.0, 0.0},
+					"radius":   1.0,
+					"color":    []interface{}{1.5, 0.0, 0.0}, // Color > 1.0
+				},
+			},
+			shouldError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sm := NewSceneManager()
+			err := sm.AddShapes([]ShapeRequest{tt.shape})
+
+			if tt.shouldError && err == nil {
+				t.Errorf("Expected error for %s, but got none", tt.name)
+			} else if !tt.shouldError && err != nil {
+				t.Errorf("Unexpected error for %s: %v", tt.name, err)
+			}
+		})
+	}
+
+	// Test duplicate ID separately since it requires existing shapes
+	t.Run("duplicate ID", func(t *testing.T) {
+		sm := NewSceneManager()
+
+		// Add first shape
+		first := ShapeRequest{
+			ID:   "existing_shape",
+			Type: "sphere",
+			Properties: map[string]interface{}{
+				"position": []interface{}{0.0, 0.0, 0.0},
+				"radius":   1.0,
+			},
+		}
+		err := sm.AddShapes([]ShapeRequest{first})
+		if err != nil {
+			t.Fatalf("Failed to add first shape: %v", err)
+		}
+
+		// Try to add duplicate ID
+		duplicate := ShapeRequest{
+			ID:   "existing_shape", // Same ID
+			Type: "box",
+			Properties: map[string]interface{}{
+				"position":   []interface{}{1.0, 1.0, 1.0},
+				"dimensions": []interface{}{1.0, 1.0, 1.0},
+			},
+		}
+		err = sm.AddShapes([]ShapeRequest{duplicate})
+		if err == nil {
+			t.Error("Expected error for duplicate ID, but got none")
+		}
+	})
 }
