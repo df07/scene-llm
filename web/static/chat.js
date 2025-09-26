@@ -196,6 +196,9 @@ class SceneLLMChat {
         if (typeof content === 'string') {
             // Simple text content
             contentDiv.innerHTML = this.formatMessageContent(content);
+        } else if (content instanceof HTMLElement) {
+            // DOM element content
+            contentDiv.appendChild(content);
         } else {
             // Rich content (for future use)
             contentDiv.textContent = JSON.stringify(content);
@@ -272,13 +275,176 @@ class SceneLLMChat {
         }
     }
 
-    handleFunctionCalls(functionCalls) {
-        // Show what functions the LLM called
-        const callsText = functionCalls.map(call =>
-            `Created ${call.type} at [${call.position.join(', ')}] size ${call.size} color RGB[${call.color.join(', ')}]`
-        ).join('\n');
+    handleFunctionCalls(toolCallEvent) {
+        // Handle the new ToolCallEvent format
+        // toolCallEvent has: Operation, Success, Error, Duration, Timestamp
 
-        this.addMessage('system', `Function calls:\n${callsText}`);
+        // Create tool call message element
+        const toolCallDiv = this.createToolCallElement(toolCallEvent);
+
+        // Add as a system message
+        this.addMessage('system', toolCallDiv);
+    }
+
+    createToolCallElement(toolCallEvent) {
+        const container = document.createElement('div');
+        container.className = `tool-call-container ${toolCallEvent.success ? 'success' : 'error'}`;
+
+        // Create summary line with expand/collapse button
+        const summaryDiv = document.createElement('div');
+        summaryDiv.className = `tool-call-summary ${toolCallEvent.success ? 'success' : 'error'}`;
+
+        const summaryText = this.getToolCallSummary(toolCallEvent);
+        const expandButton = document.createElement('button');
+        expandButton.className = 'tool-call-expand';
+        expandButton.textContent = '[+]';
+        expandButton.setAttribute('aria-label', 'Show details');
+
+        summaryDiv.innerHTML = `🔧 ${summaryText} `;
+        summaryDiv.appendChild(expandButton);
+
+        // Create details section (hidden by default)
+        const detailsDiv = document.createElement('div');
+        detailsDiv.className = 'tool-call-details';
+        detailsDiv.style.display = 'none';
+        detailsDiv.innerHTML = this.getToolCallDetails(toolCallEvent);
+
+        // Toggle functionality
+        let expanded = false;
+        expandButton.addEventListener('click', () => {
+            expanded = !expanded;
+            detailsDiv.style.display = expanded ? 'block' : 'none';
+            expandButton.textContent = expanded ? '[-]' : '[+]';
+            expandButton.setAttribute('aria-label', expanded ? 'Hide details' : 'Show details');
+        });
+
+        container.appendChild(summaryDiv);
+        container.appendChild(detailsDiv);
+
+        return container;
+    }
+
+    getToolCallSummary(toolCallEvent) {
+        const op = toolCallEvent.operation;
+        const success = toolCallEvent.success;
+
+        if (!success) {
+            return `${this.getToolDisplayName(op.tool_name)} failed: ${toolCallEvent.error}`;
+        }
+
+        switch (op.tool_name) {
+            case 'create_shape':
+                return `Created shape: ${op.shape.id}`;
+            case 'update_shape':
+                // Check if ID was changed
+                if (op.before && op.after && op.before.id !== op.after.id) {
+                    return `Updated shape: ${op.before.id} → ${op.after.id}`;
+                } else {
+                    return `Updated shape: ${op.id}`;
+                }
+            case 'remove_shape':
+                return `Removed shape: ${op.id}`;
+            default:
+                return `${this.getToolDisplayName(op.tool_name)} (${op.id})`;
+        }
+    }
+
+    getToolDisplayName(toolName) {
+        const displayNames = {
+            'create_shape': 'Create Shape',
+            'update_shape': 'Update Shape',
+            'remove_shape': 'Remove Shape'
+        };
+        return displayNames[toolName] || toolName;
+    }
+
+    getToolCallDetails(toolCallEvent) {
+        const op = toolCallEvent.operation;
+
+        let details = `
+            <div class="tool-call-meta">
+                <strong>Function:</strong> ${op.tool_name}<br>
+                <strong>Target:</strong> ${this.getOperationTarget(op) || 'N/A'}<br>
+                <strong>Status:</strong> ${toolCallEvent.success ? '✓ Success' : '❌ Failed'}<br>
+                <strong>Duration:</strong> ${toolCallEvent.duration}ms<br>
+            </div>
+        `;
+
+        if (!toolCallEvent.success) {
+            details += `<div class="tool-call-error"><strong>Error:</strong> ${toolCallEvent.error}</div>`;
+        }
+
+        // Add operation-specific details
+        switch (op.tool_name) {
+            case 'create_shape':
+                details += this.getCreateShapeDetails(op);
+                break;
+            case 'update_shape':
+                details += this.getUpdateShapeDetails(op);
+                break;
+            case 'remove_shape':
+                details += this.getRemoveShapeDetails(op);
+                break;
+        }
+
+        return details;
+    }
+
+    getOperationTarget(op) {
+        switch (op.tool_name) {
+            case 'create_shape':
+                return op.shape ? op.shape.id : '';
+            case 'update_shape':
+            case 'remove_shape':
+                return op.id;
+            default:
+                return '';
+        }
+    }
+
+    getCreateShapeDetails(op) {
+        const shape = op.shape;
+        return `
+            <div class="tool-call-shape-details">
+                <strong>Created Shape:</strong>
+                <div class="shape-properties">
+                    <div>Type: ${shape.type}</div>
+                    <div>Properties: <pre>${JSON.stringify(shape.properties, null, 2)}</pre></div>
+                </div>
+            </div>
+        `;
+    }
+
+    getUpdateShapeDetails(op) {
+        let details = `
+            <div class="tool-call-shape-details">
+                <strong>Updates:</strong> <pre>${JSON.stringify(op.updates, null, 2)}</pre>
+        `;
+
+        if (op.before && op.after) {
+            details += `
+                <strong>Before:</strong> <pre>${JSON.stringify(op.before, null, 2)}</pre>
+                <strong>After:</strong> <pre>${JSON.stringify(op.after, null, 2)}</pre>
+            `;
+        }
+
+        details += '</div>';
+        return details;
+    }
+
+    getRemoveShapeDetails(op) {
+        if (op.removed_shape) {
+            return `
+                <div class="tool-call-shape-details">
+                    <strong>Removed Shape:</strong>
+                    <div class="shape-properties">
+                        <div>Type: ${op.removed_shape.type}</div>
+                        <div>Properties: <pre>${JSON.stringify(op.removed_shape.properties, null, 2)}</pre></div>
+                    </div>
+                </div>
+            `;
+        }
+        return '';
     }
 
     updateScenePreview(scene) {

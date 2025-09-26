@@ -167,3 +167,92 @@ func parseRemoveFromFunctionCall(call *genai.FunctionCall) string {
 
 	return ""
 }
+
+// New parsing functions that create ToolOperation objects
+
+// parseToolOperationFromFunctionCall creates a ToolOperation from any function call
+func parseToolOperationFromFunctionCall(call *genai.FunctionCall) ToolOperation {
+	switch call.Name {
+	case "create_shape":
+		return parseCreateShapeOperation(call)
+	case "update_shape":
+		return parseUpdateShapeOperation(call)
+	case "remove_shape":
+		return parseRemoveShapeOperation(call)
+	default:
+		return nil
+	}
+}
+
+// parseCreateShapeOperation creates a CreateShapeOperation from a create_shape function call
+func parseCreateShapeOperation(call *genai.FunctionCall) *CreateShapeOperation {
+	if call.Name != "create_shape" {
+		return nil
+	}
+
+	var shape ShapeRequest
+	args := call.Args
+
+	// Extract ID
+	if idVal, ok := args["id"].(string); ok {
+		shape.ID = idVal
+	}
+
+	// Extract type
+	if typeVal, ok := args["type"].(string); ok {
+		shape.Type = typeVal
+	}
+
+	// Extract properties as-is (let SceneManager validate them)
+	if propsVal, ok := args["properties"].(map[string]interface{}); ok {
+		shape.Properties = propsVal
+	}
+
+	return &CreateShapeOperation{
+		Shape:    shape,
+		ToolType: "create_shape",
+	}
+}
+
+// parseUpdateShapeOperation creates an UpdateShapeOperation from an update_shape function call
+func parseUpdateShapeOperation(call *genai.FunctionCall) *UpdateShapeOperation {
+	if call.Name != "update_shape" {
+		return nil
+	}
+
+	args := call.Args
+	operation := &UpdateShapeOperation{
+		ToolType: "update_shape",
+	}
+
+	// Extract ID
+	if idVal, ok := args["id"].(string); ok {
+		operation.ID = idVal
+	}
+
+	// Extract updates
+	if updatesVal, ok := args["updates"].(map[string]interface{}); ok {
+		operation.Updates = updatesVal
+	}
+
+	return operation
+}
+
+// parseRemoveShapeOperation creates a RemoveShapeOperation from a remove_shape function call
+func parseRemoveShapeOperation(call *genai.FunctionCall) *RemoveShapeOperation {
+	if call.Name != "remove_shape" {
+		return nil
+	}
+
+	args := call.Args
+	operation := &RemoveShapeOperation{
+		ToolType: "remove_shape",
+	}
+
+	// Extract ID
+	if idVal, ok := args["id"].(string); ok {
+		operation.ID = idVal
+	}
+
+	return operation
+}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"google.golang.org/genai"
 )
@@ -75,37 +76,16 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Conten
 	}
 
 	var textResponse string
-	var createShapes []ShapeRequest
 	var hasShapeOperations bool
 
 	// Process all parts of the response
 	for _, part := range result.Candidates[0].Content.Parts {
 		// Handle function calls
 		if part.FunctionCall != nil {
-			switch part.FunctionCall.Name {
-			case "create_shape":
-				if shape := parseShapeFromFunctionCall(part.FunctionCall); shape != nil {
-					createShapes = append(createShapes, *shape)
-					hasShapeOperations = true
-				}
-			case "update_shape":
-				if update := parseUpdateFromFunctionCall(part.FunctionCall); update != nil {
-					err := a.sceneManager.UpdateShape(update.ID, update.Updates)
-					if err != nil {
-						a.events <- NewErrorEvent(err)
-						return err
-					}
-					hasShapeOperations = true
-				}
-			case "remove_shape":
-				if id := parseRemoveFromFunctionCall(part.FunctionCall); id != "" {
-					err := a.sceneManager.RemoveShape(id)
-					if err != nil {
-						a.events <- NewErrorEvent(err)
-						return err
-					}
-					hasShapeOperations = true
-				}
+			operation := parseToolOperationFromFunctionCall(part.FunctionCall)
+			if operation != nil {
+				hasShapeOperations = true
+				a.executeToolOperation(operation)
 			}
 		}
 
@@ -120,18 +100,8 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Conten
 		a.events <- NewResponseEvent(textResponse)
 	}
 
-	// Apply shape operations to scene manager and emit scene update
-	if len(createShapes) > 0 || hasShapeOperations {
-		// Add new shapes to scene manager if any
-		if len(createShapes) > 0 {
-			err := a.sceneManager.AddShapes(createShapes)
-			if err != nil {
-				a.events <- NewErrorEvent(fmt.Errorf("failed to add shapes to scene: %w", err))
-				return err
-			}
-		}
-
-		// Convert to raytracer scene and emit render event
+	// Emit scene render event if any operations were performed
+	if hasShapeOperations {
 		raytracerScene := a.sceneManager.ToRaytracerScene()
 		a.events <- NewSceneRenderEvent(raytracerScene)
 	}
@@ -139,6 +109,50 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Conten
 	// Send completion event
 	a.events <- NewCompleteEvent()
 	return nil
+}
+
+// executeToolOperation executes a tool operation and emits appropriate events
+func (a *Agent) executeToolOperation(operation ToolOperation) {
+	startTime := time.Now()
+	var err error
+
+	switch op := operation.(type) {
+	case *CreateShapeOperation:
+		err = a.sceneManager.AddShapes([]ShapeRequest{op.Shape})
+	case *UpdateShapeOperation:
+		// Capture before state
+		if beforeShape := a.sceneManager.FindShape(op.ID); beforeShape != nil {
+			op.Before = beforeShape
+		}
+
+		err = a.sceneManager.UpdateShape(op.ID, op.Updates)
+
+		// Capture after state if successful
+		if err == nil {
+			if afterShape := a.sceneManager.FindShape(op.ID); afterShape != nil {
+				op.After = afterShape
+			}
+		}
+	case *RemoveShapeOperation:
+		// Capture shape before removal
+		if beforeShape := a.sceneManager.FindShape(op.ID); beforeShape != nil {
+			op.RemovedShape = beforeShape
+		}
+
+		err = a.sceneManager.RemoveShape(op.ID)
+	}
+
+	// Calculate duration
+	duration := time.Since(startTime).Milliseconds()
+
+	// Emit ToolCallEvent
+	var errorMsg string
+	success := err == nil
+	if err != nil {
+		errorMsg = err.Error()
+	}
+
+	a.events <- NewToolCallEvent(operation, success, errorMsg, duration)
 }
 
 // addSceneContext prepends scene context to the latest user message

@@ -188,6 +188,10 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 	// Get or create session
 	session := s.getOrCreateSession(chatMsg.SessionID)
+	if session == nil {
+		http.Error(w, "Failed to create session", http.StatusInternalServerError)
+		return
+	}
 
 	// Add user message to conversation history
 	s.mutex.Lock()
@@ -303,6 +307,10 @@ func (s *Server) processMessage(session *ChatSession, message string) {
 			// Handle ready-to-render scene from agent
 			s.renderAndBroadcastScene(session.ID, e.RaytracerScene)
 
+		case agent.ToolCallEvent:
+			// Handle tool call events with logging and broadcasting
+			s.handleToolCallEvent(session.ID, e)
+
 		case agent.ThinkingEvent:
 			s.broadcastToSession(session.ID, SSEChatEvent{Type: e.EventType(), Data: e.Message})
 		case agent.ErrorEvent:
@@ -365,4 +373,24 @@ func (s *Server) renderAndBroadcastScene(sessionID string, raytracerScene *scene
 	})
 
 	log.Printf("Scene rendered for session %s - %d shapes", sessionID, len(raytracerScene.Shapes))
+}
+
+// handleToolCallEvent processes tool call events with logging and client broadcast
+func (s *Server) handleToolCallEvent(sessionID string, event agent.ToolCallEvent) {
+	// Log to server with terse format as specified in our spec
+	if event.Success {
+		log.Printf("INFO  [session:%s] Tool call: %s (%s)",
+			sessionID, event.Operation.ToolName(), event.Operation.Target())
+	} else {
+		log.Printf("INFO  [session:%s] Tool call: %s (%s)",
+			sessionID, event.Operation.ToolName(), event.Operation.Target())
+		log.Printf("ERROR [session:%s] Tool call FAILED", sessionID)
+		log.Printf("      %s", event.Error)
+	}
+
+	// Broadcast the event to the client (the client will handle display formatting)
+	s.broadcastToSession(sessionID, SSEChatEvent{
+		Type: event.EventType(), // "function_calls"
+		Data: event,             // Send the entire ToolCallEvent structure
+	})
 }
