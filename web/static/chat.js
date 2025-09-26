@@ -282,8 +282,8 @@ class SceneLLMChat {
         // Create tool call message element
         const toolCallDiv = this.createToolCallElement(toolCallEvent);
 
-        // Add as a system message
-        this.addMessage('system', toolCallDiv);
+        // Add as a agent message
+        this.addMessage('assistant', toolCallDiv);
     }
 
     createToolCallElement(toolCallEvent) {

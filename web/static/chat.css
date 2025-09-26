@@ -116,7 +116,7 @@ body {
 
 .messages-container {
     flex: 1;
-    overflow-y: auto;
+    overflow-y: scroll;
     padding: 20px;
     display: flex;
     flex-direction: column;
@@ -139,7 +139,7 @@ body {
 
 .message.system {
     align-self: center;
-    max-width: 100%;
+    max-width: 90%;
 }
 
 .message-content {
