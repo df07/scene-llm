@@ -20,7 +20,6 @@ class SceneLLMChat {
         this.statusText = document.getElementById('statusText');
         this.clearChatButton = document.getElementById('clearChat');
         this.scenePreview = document.getElementById('scenePreview');
-        this.sceneInfo = document.getElementById('sceneInfo');
     }
 
     attachEventListeners() {
@@ -155,9 +154,6 @@ class SceneLLMChat {
         console.log('SSE Event:', event);
 
         switch (event.type) {
-            case 'scene_state':
-                this.handleSceneState(event.data);
-                break;
             case 'thinking':
                 this.updateThinkingMessage(event.data);
                 break;
@@ -254,22 +250,8 @@ class SceneLLMChat {
             .replace(/`([^`]+)`/g, '<code>$1</code>');
     }
 
-    handleSceneState(data) {
-        if (data.scene && data.scene.shapes) {
-            const shapeCount = data.scene.shapes.length;
-            this.sceneInfo.textContent = shapeCount === 0 ? 'Empty scene' : `${shapeCount} shape${shapeCount !== 1 ? 's' : ''}`;
-
-            if (shapeCount > 0) {
-                this.updateScenePreview(data.scene);
-            }
-        }
-    }
 
     handleSceneUpdate(data) {
-        if (data.scene) {
-            this.handleSceneState({scene: data.scene});
-        }
-
         if (data.image_base64) {
             this.displaySceneImage(data.image_base64);
         }
@@ -447,33 +429,11 @@ class SceneLLMChat {
         return '';
     }
 
-    updateScenePreview(scene) {
-        const placeholder = this.scenePreview.querySelector('.no-scene-placeholder');
-        if (placeholder) {
-            placeholder.remove();
-        }
-
-        // Add or update scene details
-        let detailsDiv = this.scenePreview.querySelector('.scene-details');
-        if (!detailsDiv) {
-            detailsDiv = document.createElement('div');
-            detailsDiv.className = 'scene-details';
-            this.scenePreview.appendChild(detailsDiv);
-        }
-
-        const shapesList = scene.shapes.map(shape =>
-            `${shape.type} at [${shape.position.map(p => p.toFixed(1)).join(', ')}] size ${shape.size} color RGB[${shape.color.map(c => c.toFixed(1)).join(', ')}]`
-        ).join('');
-
-        detailsDiv.innerHTML = `
-            <h4>Scene Objects:</h4>
-            <ul>
-                ${scene.shapes.map(shape => `<li>${shape.type} at [${shape.position.map(p => p.toFixed(1)).join(', ')}] size ${shape.size} color RGB[${shape.color.map(c => c.toFixed(1)).join(', ')}]</li>`).join('')}
-            </ul>
-        `;
-    }
-
     displaySceneImage(imageBase64) {
+        // Remove "No scene yet" placeholder
+        const placeholder = this.scenePreview.querySelector('.no-scene-placeholder');
+        if (placeholder) placeholder.remove();
+
         // Remove loading indicator
         const loading = this.scenePreview.querySelector('.scene-loading');
         if (loading) loading.remove();
@@ -488,13 +448,8 @@ class SceneLLMChat {
         img.src = `data:image/png;base64,${imageBase64}`;
         img.alt = 'Generated 3D scene';
 
-        // Insert before scene details if they exist
-        const details = this.scenePreview.querySelector('.scene-details');
-        if (details) {
-            this.scenePreview.insertBefore(img, details);
-        } else {
-            this.scenePreview.appendChild(img);
-        }
+        // Add the image to the scene preview
+        this.scenePreview.appendChild(img);
     }
 
     scrollToBottom() {
@@ -531,8 +486,6 @@ class SceneLLMChat {
                     <p>Start by asking me to create something!</p>
                 </div>
             `;
-
-            this.sceneInfo.textContent = 'Empty scene';
 
             // Start new session
             this.startNewSession();
