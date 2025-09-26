@@ -444,8 +444,11 @@ func (sm *SceneManager) ToRaytracerScene() *scene.Scene {
 		CameraConfig:   cameraConfig,
 	}
 
-	// Add default lighting
-	sceneWithShapes.AddUniformInfiniteLight(core.NewVec3(0.5, 0.7, 1.0))
+	// Add default sky gradient lighting (blue to white)
+	sceneWithShapes.AddGradientInfiniteLight(
+		core.NewVec3(0.5, 0.7, 1.0), // topColor (blue sky)
+		core.NewVec3(1.0, 1.0, 1.0), // bottomColor (white horizon)
+	)
 
 	return sceneWithShapes
 }
