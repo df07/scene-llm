@@ -9,6 +9,64 @@ import (
 	"github.com/df07/go-progressive-raytracer/pkg/scene"
 )
 
+// Helper functions for extracting properties from map[string]interface{}
+
+// extractFloatArray extracts a float array of specified length from properties
+func extractFloatArray(properties map[string]interface{}, key string, length int) ([]float64, bool) {
+	if val, ok := properties[key].([]interface{}); ok && len(val) == length {
+		result := make([]float64, length)
+		for i, v := range val {
+			if f, ok := v.(float64); ok {
+				result[i] = f
+			} else {
+				return nil, false
+			}
+		}
+		return result, true
+	}
+	return nil, false
+}
+
+// extractFloat extracts a single float value from properties
+func extractFloat(properties map[string]interface{}, key string) (float64, bool) {
+	if val, ok := properties[key].(float64); ok {
+		return val, true
+	}
+	return 0, false
+}
+
+// validateFloatArray validates that a property is a float array of specified length with optional range check
+func validateFloatArray(properties map[string]interface{}, key string, length int, minVal, maxVal *float64, shapeID string) error {
+	val, ok := properties[key].([]interface{})
+	if !ok {
+		return fmt.Errorf("%s '%s' %s must be an array", getShapeType(properties), shapeID, key)
+	}
+	if len(val) != length {
+		return fmt.Errorf("%s '%s' %s must have exactly %d values", getShapeType(properties), shapeID, key, length)
+	}
+	for i, v := range val {
+		f, ok := v.(float64)
+		if !ok {
+			return fmt.Errorf("%s '%s' %s[%d] must be a number", getShapeType(properties), shapeID, key, i)
+		}
+		if minVal != nil && f < *minVal {
+			return fmt.Errorf("%s '%s' %s[%d] must be >= %.1f", getShapeType(properties), shapeID, key, i, *minVal)
+		}
+		if maxVal != nil && f > *maxVal {
+			return fmt.Errorf("%s '%s' %s[%d] must be <= %.1f", getShapeType(properties), shapeID, key, i, *maxVal)
+		}
+	}
+	return nil
+}
+
+// getShapeType extracts shape type from validation context (helper for error messages)
+func getShapeType(properties map[string]interface{}) string {
+	if typeVal, ok := properties["type"].(string); ok {
+		return typeVal
+	}
+	return "shape"
+}
+
 // SceneManager handles all scene state and operations
 type SceneManager struct {
 	state *SceneState
@@ -52,22 +110,13 @@ func validateShapeProperties(shape ShapeRequest) error {
 		}
 
 		// Validate position is an array of 3 numbers
-		if posVal, ok := shape.Properties["position"].([]interface{}); ok {
-			if len(posVal) != 3 {
-				return fmt.Errorf("sphere '%s' position must have exactly 3 coordinates", shape.ID)
-			}
-			for i, coord := range posVal {
-				if _, ok := coord.(float64); !ok {
-					return fmt.Errorf("sphere '%s' position[%d] must be a number", shape.ID, i)
-				}
-			}
-		} else {
-			return fmt.Errorf("sphere '%s' position must be an array", shape.ID)
+		if err := validateFloatArray(shape.Properties, "position", 3, nil, nil, shape.ID); err != nil {
+			return err
 		}
 
 		// Validate radius is a positive number
-		if radiusVal, ok := shape.Properties["radius"].(float64); ok {
-			if radiusVal <= 0 {
+		if radius, ok := extractFloat(shape.Properties, "radius"); ok {
+			if radius <= 0 {
 				return fmt.Errorf("sphere '%s' radius must be positive", shape.ID)
 			}
 		} else {
@@ -84,35 +133,14 @@ func validateShapeProperties(shape ShapeRequest) error {
 		}
 
 		// Validate position is an array of 3 numbers
-		if posVal, ok := shape.Properties["position"].([]interface{}); ok {
-			if len(posVal) != 3 {
-				return fmt.Errorf("box '%s' position must have exactly 3 coordinates", shape.ID)
-			}
-			for i, coord := range posVal {
-				if _, ok := coord.(float64); !ok {
-					return fmt.Errorf("box '%s' position[%d] must be a number", shape.ID, i)
-				}
-			}
-		} else {
-			return fmt.Errorf("box '%s' position must be an array", shape.ID)
+		if err := validateFloatArray(shape.Properties, "position", 3, nil, nil, shape.ID); err != nil {
+			return err
 		}
 
 		// Validate dimensions is an array of 3 positive numbers
-		if dimsVal, ok := shape.Properties["dimensions"].([]interface{}); ok {
-			if len(dimsVal) != 3 {
-				return fmt.Errorf("box '%s' dimensions must have exactly 3 values [width, height, depth]", shape.ID)
-			}
-			for i, dim := range dimsVal {
-				if dimNum, ok := dim.(float64); ok {
-					if dimNum <= 0 {
-						return fmt.Errorf("box '%s' dimensions[%d] must be positive", shape.ID, i)
-					}
-				} else {
-					return fmt.Errorf("box '%s' dimensions[%d] must be a number", shape.ID, i)
-				}
-			}
-		} else {
-			return fmt.Errorf("box '%s' dimensions must be an array", shape.ID)
+		zero := 0.0
+		if err := validateFloatArray(shape.Properties, "dimensions", 3, &zero, nil, shape.ID); err != nil {
+			return err
 		}
 
 	default:
@@ -120,22 +148,11 @@ func validateShapeProperties(shape ShapeRequest) error {
 	}
 
 	// Validate color if present (optional property)
-	if colorVal, exists := shape.Properties["color"]; exists {
-		if colorArray, ok := colorVal.([]interface{}); ok {
-			if len(colorArray) != 3 {
-				return fmt.Errorf("shape '%s' color must have exactly 3 values [r, g, b]", shape.ID)
-			}
-			for i, component := range colorArray {
-				if colorNum, ok := component.(float64); ok {
-					if colorNum < 0 || colorNum > 1 {
-						return fmt.Errorf("shape '%s' color[%d] must be between 0 and 1", shape.ID, i)
-					}
-				} else {
-					return fmt.Errorf("shape '%s' color[%d] must be a number", shape.ID, i)
-				}
-			}
-		} else {
-			return fmt.Errorf("shape '%s' color must be an array", shape.ID)
+	if _, exists := shape.Properties["color"]; exists {
+		zero := 0.0
+		one := 1.0
+		if err := validateFloatArray(shape.Properties, "color", 3, &zero, &one, shape.ID); err != nil {
+			return err
 		}
 	}
 
@@ -179,23 +196,17 @@ func (sm *SceneManager) updateCameraForShape(shape ShapeRequest) {
 
 	if props := shape.Properties; props != nil {
 		// Try to get position
-		if posVal, ok := props["position"].([]interface{}); ok && len(posVal) == 3 {
-			for i, v := range posVal {
-				if f, ok := v.(float64); ok {
-					position[i] = f
-				}
-			}
+		if posArray, ok := extractFloatArray(props, "position", 3); ok {
+			copy(position[:], posArray)
 		}
 
 		// Try to get size (radius for sphere, dimensions for box, etc.)
-		if sizeVal, ok := props["radius"].(float64); ok {
+		if radius, ok := extractFloat(props, "radius"); ok {
+			size = radius
+		} else if sizeVal, ok := extractFloat(props, "size"); ok {
 			size = sizeVal
-		} else if sizeVal, ok := props["size"].(float64); ok {
-			size = sizeVal
-		} else if dimsVal, ok := props["dimensions"].([]interface{}); ok && len(dimsVal) >= 1 {
-			if f, ok := dimsVal[0].(float64); ok {
-				size = f // Use first dimension as representative size
-			}
+		} else if dimsArray, ok := extractFloatArray(props, "dimensions", 3); ok {
+			size = dimsArray[0] // Use first dimension as representative size
 		}
 	}
 
@@ -343,32 +354,22 @@ func extractShapeProperties(shape ShapeRequest) (position [3]float64, size float
 	}
 
 	// Extract position
-	if posVal, ok := shape.Properties["position"].([]interface{}); ok && len(posVal) >= 3 {
-		for i := 0; i < 3 && i < len(posVal); i++ {
-			if f, ok := posVal[i].(float64); ok {
-				position[i] = f
-			}
-		}
+	if posArray, ok := extractFloatArray(shape.Properties, "position", 3); ok {
+		copy(position[:], posArray)
 	}
 
 	// Extract size/radius
-	if sizeVal, ok := shape.Properties["radius"].(float64); ok {
+	if radius, ok := extractFloat(shape.Properties, "radius"); ok {
+		size = radius
+	} else if sizeVal, ok := extractFloat(shape.Properties, "size"); ok {
 		size = sizeVal
-	} else if sizeVal, ok := shape.Properties["size"].(float64); ok {
-		size = sizeVal
-	} else if dimsVal, ok := shape.Properties["dimensions"].([]interface{}); ok && len(dimsVal) >= 1 {
-		if f, ok := dimsVal[0].(float64); ok {
-			size = f // Use first dimension as representative size
-		}
+	} else if dimsArray, ok := extractFloatArray(shape.Properties, "dimensions", 3); ok {
+		size = dimsArray[0] // Use first dimension as representative size
 	}
 
 	// Extract color
-	if colorVal, ok := shape.Properties["color"].([]interface{}); ok && len(colorVal) >= 3 {
-		for i := 0; i < 3 && i < len(colorVal); i++ {
-			if f, ok := colorVal[i].(float64); ok {
-				color[i] = f
-			}
-		}
+	if colorArray, ok := extractFloatArray(shape.Properties, "color", 3); ok {
+		copy(color[:], colorArray)
 	}
 
 	return
@@ -419,12 +420,40 @@ func (sm *SceneManager) ToRaytracerScene() *scene.Scene {
 				shapeMaterial,
 			)
 		case "box":
-			// Create a simple cube using a sphere for now (since Box constructor seems different)
-			shape = geometry.NewSphere(
-				core.NewVec3(position[0], position[1], position[2]),
-				size/2, // Use half size for radius
-				shapeMaterial,
-			)
+			// Extract dimensions from properties
+			var dimensions [3]float64
+			if dimsArray, ok := extractFloatArray(shapeReq.Properties, "dimensions", 3); ok {
+				// Convert to half-extents
+				dimensions[0] = dimsArray[0] / 2.0
+				dimensions[1] = dimsArray[1] / 2.0
+				dimensions[2] = dimsArray[2] / 2.0
+			} else {
+				// Fallback to uniform cube using size
+				dimensions = [3]float64{size / 2, size / 2, size / 2}
+			}
+
+			// Check for optional rotation (in radians)
+			var rotation [3]float64
+			hasRotation := false
+			if rotArray, ok := extractFloatArray(shapeReq.Properties, "rotation", 3); ok {
+				copy(rotation[:], rotArray)
+				hasRotation = true
+			}
+
+			if hasRotation {
+				shape = geometry.NewBox(
+					core.NewVec3(position[0], position[1], position[2]),
+					core.NewVec3(dimensions[0], dimensions[1], dimensions[2]),
+					core.NewVec3(rotation[0], rotation[1], rotation[2]),
+					shapeMaterial,
+				)
+			} else {
+				shape = geometry.NewAxisAlignedBox(
+					core.NewVec3(position[0], position[1], position[2]),
+					core.NewVec3(dimensions[0], dimensions[1], dimensions[2]),
+					shapeMaterial,
+				)
+			}
 		default:
 			// Default to sphere
 			shape = geometry.NewSphere(

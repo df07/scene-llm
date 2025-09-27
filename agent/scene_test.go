@@ -547,6 +547,243 @@ func TestRemoveShape(t *testing.T) {
 	})
 }
 
+// Tests for helper functions
+
+func TestExtractFloatArray(t *testing.T) {
+	tests := []struct {
+		name     string
+		props    map[string]interface{}
+		key      string
+		length   int
+		expected []float64
+		shouldOK bool
+	}{
+		{
+			name:     "valid 3-element array",
+			props:    map[string]interface{}{"position": []interface{}{1.0, 2.0, 3.0}},
+			key:      "position",
+			length:   3,
+			expected: []float64{1.0, 2.0, 3.0},
+			shouldOK: true,
+		},
+		{
+			name:     "wrong length",
+			props:    map[string]interface{}{"position": []interface{}{1.0, 2.0}},
+			key:      "position",
+			length:   3,
+			expected: nil,
+			shouldOK: false,
+		},
+		{
+			name:     "non-float element",
+			props:    map[string]interface{}{"position": []interface{}{1.0, "invalid", 3.0}},
+			key:      "position",
+			length:   3,
+			expected: nil,
+			shouldOK: false,
+		},
+		{
+			name:     "missing key",
+			props:    map[string]interface{}{"other": []interface{}{1.0, 2.0, 3.0}},
+			key:      "position",
+			length:   3,
+			expected: nil,
+			shouldOK: false,
+		},
+		{
+			name:     "not an array",
+			props:    map[string]interface{}{"position": 1.0},
+			key:      "position",
+			length:   3,
+			expected: nil,
+			shouldOK: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, ok := extractFloatArray(tt.props, tt.key, tt.length)
+
+			if ok != tt.shouldOK {
+				t.Errorf("Expected ok=%v, got ok=%v", tt.shouldOK, ok)
+			}
+
+			if tt.shouldOK {
+				if len(result) != len(tt.expected) {
+					t.Errorf("Expected length %d, got %d", len(tt.expected), len(result))
+				}
+				for i, expected := range tt.expected {
+					if result[i] != expected {
+						t.Errorf("Expected result[%d]=%f, got %f", i, expected, result[i])
+					}
+				}
+			} else if result != nil {
+				t.Errorf("Expected nil result when ok=false, got %v", result)
+			}
+		})
+	}
+}
+
+func TestExtractFloat(t *testing.T) {
+	tests := []struct {
+		name     string
+		props    map[string]interface{}
+		key      string
+		expected float64
+		shouldOK bool
+	}{
+		{
+			name:     "valid float",
+			props:    map[string]interface{}{"radius": 2.5},
+			key:      "radius",
+			expected: 2.5,
+			shouldOK: true,
+		},
+		{
+			name:     "missing key",
+			props:    map[string]interface{}{"other": 2.5},
+			key:      "radius",
+			expected: 0,
+			shouldOK: false,
+		},
+		{
+			name:     "wrong type",
+			props:    map[string]interface{}{"radius": "invalid"},
+			key:      "radius",
+			expected: 0,
+			shouldOK: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, ok := extractFloat(tt.props, tt.key)
+
+			if ok != tt.shouldOK {
+				t.Errorf("Expected ok=%v, got ok=%v", tt.shouldOK, ok)
+			}
+
+			if result != tt.expected {
+				t.Errorf("Expected result=%f, got %f", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestBoxRotation(t *testing.T) {
+	sm := NewSceneManager()
+
+	tests := []struct {
+		name        string
+		box         ShapeRequest
+		shouldError bool
+		description string
+	}{
+		{
+			name: "box without rotation",
+			box: ShapeRequest{
+				ID:   "simple_box",
+				Type: "box",
+				Properties: map[string]interface{}{
+					"position":   []interface{}{0.0, 0.0, 0.0},
+					"dimensions": []interface{}{2.0, 1.0, 3.0},
+					"color":      []interface{}{1.0, 0.0, 0.0},
+				},
+			},
+			shouldError: false,
+			description: "Box without rotation should use axis-aligned constructor",
+		},
+		{
+			name: "box with rotation",
+			box: ShapeRequest{
+				ID:   "rotated_box",
+				Type: "box",
+				Properties: map[string]interface{}{
+					"position":   []interface{}{1.0, 2.0, 3.0},
+					"dimensions": []interface{}{2.0, 1.0, 3.0},
+					"rotation":   []interface{}{0.5, 1.0, 0.0}, // radians
+					"color":      []interface{}{0.0, 1.0, 0.0},
+				},
+			},
+			shouldError: false,
+			description: "Box with rotation should use rotated constructor",
+		},
+		{
+			name: "box with invalid rotation format",
+			box: ShapeRequest{
+				ID:   "bad_rotation_box",
+				Type: "box",
+				Properties: map[string]interface{}{
+					"position":   []interface{}{0.0, 0.0, 0.0},
+					"dimensions": []interface{}{1.0, 1.0, 1.0},
+					"rotation":   []interface{}{0.5, "invalid"}, // Wrong type and count
+					"color":      []interface{}{0.0, 0.0, 1.0},
+				},
+			},
+			shouldError: false, // Should fall back to axis-aligned box
+			description: "Box with invalid rotation should fall back to axis-aligned",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := sm.AddShapes([]ShapeRequest{tt.box})
+
+			if tt.shouldError && err == nil {
+				t.Errorf("Expected error for %s, but got none", tt.description)
+			} else if !tt.shouldError && err != nil {
+				t.Errorf("Unexpected error for %s: %v", tt.description, err)
+			}
+
+			// If successful, check that shape was added
+			if !tt.shouldError && err == nil {
+				found := sm.FindShape(tt.box.ID)
+				if found == nil {
+					t.Errorf("Shape %s was not added", tt.box.ID)
+				}
+			}
+
+			// Clean up for next test
+			sm.ClearScene()
+		})
+	}
+}
+
+func TestToRaytracerSceneWithRotation(t *testing.T) {
+	sm := NewSceneManager()
+
+	// Add a box with rotation
+	rotatedBox := ShapeRequest{
+		ID:   "rotated_box",
+		Type: "box",
+		Properties: map[string]interface{}{
+			"position":   []interface{}{1.0, 2.0, 3.0},
+			"dimensions": []interface{}{2.0, 1.0, 3.0},
+			"rotation":   []interface{}{0.5, 1.0, 0.0}, // radians
+			"color":      []interface{}{0.8, 0.2, 0.4},
+		},
+	}
+
+	err := sm.AddShapes([]ShapeRequest{rotatedBox})
+	if err != nil {
+		t.Fatalf("Failed to add rotated box: %v", err)
+	}
+
+	// Convert to raytracer scene
+	scene := sm.ToRaytracerScene()
+
+	if scene == nil {
+		t.Fatal("ToRaytracerScene() returned nil")
+	}
+
+	if len(scene.Shapes) != 1 {
+		t.Errorf("Expected 1 shape in raytracer scene, got %d", len(scene.Shapes))
+	}
+
+	// Test that scene can be created without errors
+	// (The actual raytracer functionality is tested by the raytracer library itself)
+}
+
 // Tests for shape validation using table-driven tests
 
 func TestValidateShapeProperties(t *testing.T) {

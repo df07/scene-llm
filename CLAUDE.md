@@ -40,6 +40,12 @@ cd web && air
 go test ./...
 ```
 
+## Testing Guidelines
+
+- **Always run tests before committing**: Use `go test ./...` to ensure all tests pass
+- **Add tests for new features**: When adding new shape types or helper functions, include comprehensive test cases covering edge cases and error conditions
+- **Test both success and failure paths**: Validate that invalid inputs are properly handled and return appropriate errors
+
 ## Technical Approach
 
 1. **Scene Schema**: Custom JSON format optimized for LLM function calls

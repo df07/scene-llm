@@ -42,7 +42,7 @@ func createShapeToolDeclaration() *genai.FunctionDeclaration {
 				},
 				"properties": {
 					Type:        genai.TypeObject,
-					Description: "Shape-specific properties. For sphere: {position: [x,y,z], radius: number, color: [r,g,b]}. For box: {position: [x,y,z], dimensions: [w,h,d], color: [r,g,b]}",
+					Description: "Shape-specific properties. For sphere: {position: [x,y,z], radius: number, color: [r,g,b]}. For box: {position: [x,y,z], dimensions: [w,h,d], color: [r,g,b], rotation: [x,y,z] (optional, degrees)}",
 				},
 			},
 			Required: []string{"id", "type", "properties"},
