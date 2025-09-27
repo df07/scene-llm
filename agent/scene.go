@@ -59,6 +59,28 @@ func validateFloatArray(properties map[string]interface{}, key string, length in
 	return nil
 }
 
+// extractString extracts a string value from properties
+func extractString(properties map[string]interface{}, key string) (string, bool) {
+	if val, ok := properties[key].(string); ok {
+		return val, true
+	}
+	return "", false
+}
+
+// hasProperty checks if a property exists in the map
+func hasProperty(properties map[string]interface{}, key string) bool {
+	_, exists := properties[key]
+	return exists
+}
+
+// validateRequiredProperty validates that a required property exists
+func validateRequiredProperty(properties map[string]interface{}, key, shapeType, shapeID string) error {
+	if !hasProperty(properties, key) {
+		return fmt.Errorf("%s '%s' requires '%s' property", shapeType, shapeID, key)
+	}
+	return nil
+}
+
 // getShapeType extracts shape type from validation context (helper for error messages)
 func getShapeType(properties map[string]interface{}) string {
 	if typeVal, ok := properties["type"].(string); ok {
@@ -101,12 +123,12 @@ func validateShapeProperties(shape ShapeRequest) error {
 
 	switch shape.Type {
 	case "sphere":
-		// Sphere requires position and radius
-		if _, hasPos := shape.Properties["position"]; !hasPos {
-			return fmt.Errorf("sphere '%s' requires 'position' property", shape.ID)
+		// Validate required properties exist
+		if err := validateRequiredProperty(shape.Properties, "position", "sphere", shape.ID); err != nil {
+			return err
 		}
-		if _, hasRadius := shape.Properties["radius"]; !hasRadius {
-			return fmt.Errorf("sphere '%s' requires 'radius' property", shape.ID)
+		if err := validateRequiredProperty(shape.Properties, "radius", "sphere", shape.ID); err != nil {
+			return err
 		}
 
 		// Validate position is an array of 3 numbers
@@ -124,12 +146,12 @@ func validateShapeProperties(shape ShapeRequest) error {
 		}
 
 	case "box":
-		// Box requires position and dimensions
-		if _, hasPos := shape.Properties["position"]; !hasPos {
-			return fmt.Errorf("box '%s' requires 'position' property", shape.ID)
+		// Validate required properties exist
+		if err := validateRequiredProperty(shape.Properties, "position", "box", shape.ID); err != nil {
+			return err
 		}
-		if _, hasDims := shape.Properties["dimensions"]; !hasDims {
-			return fmt.Errorf("box '%s' requires 'dimensions' property", shape.ID)
+		if err := validateRequiredProperty(shape.Properties, "dimensions", "box", shape.ID); err != nil {
+			return err
 		}
 
 		// Validate position is an array of 3 numbers
@@ -148,7 +170,7 @@ func validateShapeProperties(shape ShapeRequest) error {
 	}
 
 	// Validate color if present (optional property)
-	if _, exists := shape.Properties["color"]; exists {
+	if hasProperty(shape.Properties, "color") {
 		zero := 0.0
 		one := 1.0
 		if err := validateFloatArray(shape.Properties, "color", 3, &zero, &one, shape.ID); err != nil {

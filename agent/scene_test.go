@@ -238,13 +238,13 @@ func TestGetStateReturnsImmutableCopy(t *testing.T) {
 	}
 
 	// Second state should be unaffected
-	if radius, ok := state2.Shapes[0].Properties["radius"].(float64); !ok || radius != 1.0 {
+	if radius, ok := extractFloat(state2.Shapes[0].Properties, "radius"); !ok || radius != 1.0 {
 		t.Errorf("GetState() should return independent copies, but modification affected other copy")
 	}
 
 	// Original scene should be unaffected
 	originalState := sm.GetState()
-	if radius, ok := originalState.Shapes[0].Properties["radius"].(float64); !ok || radius != 1.0 {
+	if radius, ok := extractFloat(originalState.Shapes[0].Properties, "radius"); !ok || radius != 1.0 {
 		t.Errorf("GetState() should return copies, but modification affected original scene")
 	}
 }
@@ -379,8 +379,8 @@ func TestUpdateShape(t *testing.T) {
 	if updated == nil {
 		t.Fatal("Shape disappeared after update")
 	}
-	if color, ok := updated.Properties["color"].([]interface{}); !ok || len(color) != 3 ||
-		color[0].(float64) != 1.0 || color[1].(float64) != 0.0 || color[2].(float64) != 1.0 {
+	if colorArray, ok := extractFloatArray(updated.Properties, "color", 3); !ok ||
+		colorArray[0] != 1.0 || colorArray[1] != 0.0 || colorArray[2] != 1.0 {
 		t.Errorf("Color not updated correctly: %+v", updated.Properties["color"])
 	}
 
@@ -667,6 +667,71 @@ func TestExtractFloat(t *testing.T) {
 				t.Errorf("Expected result=%f, got %f", tt.expected, result)
 			}
 		})
+	}
+}
+
+func TestExtractString(t *testing.T) {
+	tests := []struct {
+		name     string
+		props    map[string]interface{}
+		key      string
+		expected string
+		shouldOK bool
+	}{
+		{
+			name:     "valid string",
+			props:    map[string]interface{}{"id": "test_shape"},
+			key:      "id",
+			expected: "test_shape",
+			shouldOK: true,
+		},
+		{
+			name:     "missing key",
+			props:    map[string]interface{}{"other": "test"},
+			key:      "id",
+			expected: "",
+			shouldOK: false,
+		},
+		{
+			name:     "wrong type",
+			props:    map[string]interface{}{"id": 123},
+			key:      "id",
+			expected: "",
+			shouldOK: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, ok := extractString(tt.props, tt.key)
+
+			if ok != tt.shouldOK {
+				t.Errorf("Expected ok=%v, got ok=%v", tt.shouldOK, ok)
+			}
+
+			if result != tt.expected {
+				t.Errorf("Expected result=%s, got %s", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestHasProperty(t *testing.T) {
+	props := map[string]interface{}{
+		"existing": "value",
+		"nil_val":  nil,
+	}
+
+	if !hasProperty(props, "existing") {
+		t.Error("Expected hasProperty to return true for existing key")
+	}
+
+	if !hasProperty(props, "nil_val") {
+		t.Error("Expected hasProperty to return true for key with nil value")
+	}
+
+	if hasProperty(props, "missing") {
+		t.Error("Expected hasProperty to return false for missing key")
 	}
 }
 

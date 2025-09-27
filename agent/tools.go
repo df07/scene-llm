@@ -4,6 +4,24 @@ import (
 	"google.golang.org/genai"
 )
 
+// Helper functions for extracting values from function call arguments
+
+// extractStringArg extracts a string argument from function call args
+func extractStringArg(args map[string]interface{}, key string) (string, bool) {
+	if val, ok := args[key].(string); ok {
+		return val, true
+	}
+	return "", false
+}
+
+// extractMapArg extracts a map argument from function call args
+func extractMapArg(args map[string]interface{}, key string) (map[string]interface{}, bool) {
+	if val, ok := args[key].(map[string]interface{}); ok {
+		return val, true
+	}
+	return nil, false
+}
+
 // ShapeRequest represents a shape creation/update request from the LLM
 type ShapeRequest struct {
 	ID         string                 `json:"id"`
@@ -109,18 +127,18 @@ func parseShapeFromFunctionCall(call *genai.FunctionCall) *ShapeRequest {
 	args := call.Args
 
 	// Extract ID
-	if idVal, ok := args["id"].(string); ok {
-		shape.ID = idVal
+	if id, ok := extractStringArg(args, "id"); ok {
+		shape.ID = id
 	}
 
 	// Extract type
-	if typeVal, ok := args["type"].(string); ok {
-		shape.Type = typeVal
+	if shapeType, ok := extractStringArg(args, "type"); ok {
+		shape.Type = shapeType
 	}
 
 	// Extract properties as-is (let SceneManager validate them)
-	if propsVal, ok := args["properties"].(map[string]interface{}); ok {
-		shape.Properties = propsVal
+	if props, ok := extractMapArg(args, "properties"); ok {
+		shape.Properties = props
 	}
 
 	return &shape
@@ -142,13 +160,13 @@ func parseUpdateFromFunctionCall(call *genai.FunctionCall) *ShapeUpdate {
 	args := call.Args
 
 	// Extract ID
-	if idVal, ok := args["id"].(string); ok {
-		update.ID = idVal
+	if id, ok := extractStringArg(args, "id"); ok {
+		update.ID = id
 	}
 
 	// Extract updates
-	if updatesVal, ok := args["updates"].(map[string]interface{}); ok {
-		update.Updates = updatesVal
+	if updates, ok := extractMapArg(args, "updates"); ok {
+		update.Updates = updates
 	}
 
 	return &update
@@ -161,8 +179,8 @@ func parseRemoveFromFunctionCall(call *genai.FunctionCall) string {
 	}
 
 	args := call.Args
-	if idVal, ok := args["id"].(string); ok {
-		return idVal
+	if id, ok := extractStringArg(args, "id"); ok {
+		return id
 	}
 
 	return ""
@@ -194,18 +212,18 @@ func parseCreateShapeOperation(call *genai.FunctionCall) *CreateShapeOperation {
 	args := call.Args
 
 	// Extract ID
-	if idVal, ok := args["id"].(string); ok {
-		shape.ID = idVal
+	if id, ok := extractStringArg(args, "id"); ok {
+		shape.ID = id
 	}
 
 	// Extract type
-	if typeVal, ok := args["type"].(string); ok {
-		shape.Type = typeVal
+	if shapeType, ok := extractStringArg(args, "type"); ok {
+		shape.Type = shapeType
 	}
 
 	// Extract properties as-is (let SceneManager validate them)
-	if propsVal, ok := args["properties"].(map[string]interface{}); ok {
-		shape.Properties = propsVal
+	if props, ok := extractMapArg(args, "properties"); ok {
+		shape.Properties = props
 	}
 
 	return &CreateShapeOperation{
@@ -226,13 +244,13 @@ func parseUpdateShapeOperation(call *genai.FunctionCall) *UpdateShapeOperation {
 	}
 
 	// Extract ID
-	if idVal, ok := args["id"].(string); ok {
-		operation.ID = idVal
+	if id, ok := extractStringArg(args, "id"); ok {
+		operation.ID = id
 	}
 
 	// Extract updates
-	if updatesVal, ok := args["updates"].(map[string]interface{}); ok {
-		operation.Updates = updatesVal
+	if updates, ok := extractMapArg(args, "updates"); ok {
+		operation.Updates = updates
 	}
 
 	return operation
@@ -250,8 +268,8 @@ func parseRemoveShapeOperation(call *genai.FunctionCall) *RemoveShapeOperation {
 	}
 
 	// Extract ID
-	if idVal, ok := args["id"].(string); ok {
-		operation.ID = idVal
+	if id, ok := extractStringArg(args, "id"); ok {
+		operation.ID = id
 	}
 
 	return operation
