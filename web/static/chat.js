@@ -169,7 +169,20 @@ class SceneLLMChat {
                 break;
             case 'error':
                 this.removeThinkingMessage();
-                this.addMessage('system', `Error: ${event.data}`);
+
+                // Handle session not found - stop reconnection loop
+                if (event.data === 'Session not found') {
+                    this.sessionId = null;
+                    this.isConnected = false;
+                    if (this.eventSource) {
+                        this.eventSource.close();
+                        this.eventSource = null;
+                    }
+                    this.updateConnectionStatus('disconnected', 'Server restarted - please refresh');
+                    this.addMessage('system', 'Server was restarted. Please refresh the page to continue.');
+                } else {
+                    this.addMessage('system', `Error: ${event.data}`);
+                }
                 break;
             case 'complete':
                 this.removeThinkingMessage();
