@@ -14,9 +14,9 @@ func TestParseCreateShapeOperation(t *testing.T) {
 			"id":   "test_sphere",
 			"type": "sphere",
 			"properties": map[string]interface{}{
-				"position": []interface{}{1.0, 2.0, 3.0},
-				"radius":   1.5,
-				"color":    []interface{}{1.0, 0.0, 0.0},
+				"center": []interface{}{1.0, 2.0, 3.0},
+				"radius": 1.5,
+				"color":  []interface{}{1.0, 0.0, 0.0},
 			},
 		},
 	}
@@ -121,8 +121,8 @@ func TestParseToolOperationFromFunctionCall(t *testing.T) {
 					"id":   "blue_sphere",
 					"type": "sphere",
 					"properties": map[string]interface{}{
-						"position": []interface{}{0.0, 0.0, 0.0},
-						"radius":   1.0,
+						"center": []interface{}{0.0, 0.0, 0.0},
+						"radius": 1.0,
 					},
 				},
 			},

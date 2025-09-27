@@ -38,16 +38,16 @@ func TestAddShapes(t *testing.T) {
 			ID:   "red_sphere",
 			Type: "sphere",
 			Properties: map[string]interface{}{
-				"position": []interface{}{1.0, 2.0, 3.0},
-				"radius":   2.0,
-				"color":    []interface{}{1.0, 0.0, 0.0},
+				"center": []interface{}{1.0, 2.0, 3.0},
+				"radius": 2.0,
+				"color":  []interface{}{1.0, 0.0, 0.0},
 			},
 		},
 		{
 			ID:   "green_box",
 			Type: "box",
 			Properties: map[string]interface{}{
-				"position":   []interface{}{4.0, 5.0, 6.0},
+				"center":     []interface{}{4.0, 5.0, 6.0},
 				"dimensions": []interface{}{1.5, 1.5, 1.5},
 				"color":      []interface{}{0.0, 1.0, 0.0},
 			},
@@ -80,9 +80,9 @@ func TestAddShapesUpdatesCamera(t *testing.T) {
 		ID:   "test_sphere",
 		Type: "sphere",
 		Properties: map[string]interface{}{
-			"position": []interface{}{10.0, 20.0, 30.0},
-			"radius":   5.0,
-			"color":    []interface{}{1.0, 0.0, 0.0},
+			"center": []interface{}{10.0, 20.0, 30.0},
+			"radius": 5.0,
+			"color":  []interface{}{1.0, 0.0, 0.0},
 		},
 	}
 
@@ -137,16 +137,16 @@ func TestBuildContextWithShapes(t *testing.T) {
 			ID:   "test_sphere",
 			Type: "sphere",
 			Properties: map[string]interface{}{
-				"position": []interface{}{1.5, 2.7, 3.2},
-				"radius":   2.5,
-				"color":    []interface{}{0.8, 0.2, 0.4},
+				"center": []interface{}{1.5, 2.7, 3.2},
+				"radius": 2.5,
+				"color":  []interface{}{0.8, 0.2, 0.4},
 			},
 		},
 		{
 			ID:   "test_box",
 			Type: "box",
 			Properties: map[string]interface{}{
-				"position":   []interface{}{-1.0, 0.0, 1.0},
+				"center":     []interface{}{-1.0, 0.0, 1.0},
 				"dimensions": []interface{}{1.0, 1.0, 1.0},
 				"color":      []interface{}{0.0, 1.0, 0.5},
 			},
@@ -183,9 +183,9 @@ func TestClearScene(t *testing.T) {
 			ID:   "test_sphere",
 			Type: "sphere",
 			Properties: map[string]interface{}{
-				"position": []interface{}{1.0, 2.0, 3.0},
-				"radius":   1.0,
-				"color":    []interface{}{1.0, 0.0, 0.0},
+				"center": []interface{}{1.0, 2.0, 3.0},
+				"radius": 1.0,
+				"color":  []interface{}{1.0, 0.0, 0.0},
 			},
 		},
 	}
@@ -221,9 +221,9 @@ func TestGetStateReturnsImmutableCopy(t *testing.T) {
 		ID:   "test_sphere",
 		Type: "sphere",
 		Properties: map[string]interface{}{
-			"position": []interface{}{1.0, 2.0, 3.0},
-			"radius":   1.0,
-			"color":    []interface{}{1.0, 0.0, 0.0},
+			"center": []interface{}{1.0, 2.0, 3.0},
+			"radius": 1.0,
+			"color":  []interface{}{1.0, 0.0, 0.0},
 		},
 	}
 	sm.AddShapes([]ShapeRequest{shape})
@@ -261,16 +261,16 @@ func TestGetShapeCount(t *testing.T) {
 			ID:   "sphere1",
 			Type: "sphere",
 			Properties: map[string]interface{}{
-				"position": []interface{}{0.0, 0.0, 0.0},
-				"radius":   1.0,
-				"color":    []interface{}{1.0, 0.0, 0.0},
+				"center": []interface{}{0.0, 0.0, 0.0},
+				"radius": 1.0,
+				"color":  []interface{}{1.0, 0.0, 0.0},
 			},
 		},
 		{
 			ID:   "box1",
 			Type: "box",
 			Properties: map[string]interface{}{
-				"position":   []interface{}{1.0, 1.0, 1.0},
+				"center":     []interface{}{1.0, 1.0, 1.0},
 				"dimensions": []interface{}{2.0, 2.0, 2.0},
 				"color":      []interface{}{0.0, 1.0, 0.0},
 			},
@@ -279,9 +279,9 @@ func TestGetShapeCount(t *testing.T) {
 			ID:   "sphere2",
 			Type: "sphere",
 			Properties: map[string]interface{}{
-				"position": []interface{}{2.0, 2.0, 2.0},
-				"radius":   1.5,
-				"color":    []interface{}{0.0, 0.0, 1.0},
+				"center": []interface{}{2.0, 2.0, 2.0},
+				"radius": 1.5,
+				"color":  []interface{}{0.0, 0.0, 1.0},
 			},
 		},
 	}
@@ -309,16 +309,16 @@ func TestFindShape(t *testing.T) {
 			ID:   "blue_sphere",
 			Type: "sphere",
 			Properties: map[string]interface{}{
-				"position": []interface{}{0.0, 0.0, 0.0},
-				"radius":   1.0,
-				"color":    []interface{}{0.0, 0.0, 1.0},
+				"center": []interface{}{0.0, 0.0, 0.0},
+				"radius": 1.0,
+				"color":  []interface{}{0.0, 0.0, 1.0},
 			},
 		},
 		{
 			ID:   "red_box",
 			Type: "box",
 			Properties: map[string]interface{}{
-				"position":   []interface{}{1.0, 1.0, 1.0},
+				"center":     []interface{}{1.0, 1.0, 1.0},
 				"dimensions": []interface{}{2.0, 2.0, 2.0},
 				"color":      []interface{}{1.0, 0.0, 0.0},
 			},
@@ -357,9 +357,9 @@ func TestUpdateShape(t *testing.T) {
 		ID:   "blue_sphere",
 		Type: "sphere",
 		Properties: map[string]interface{}{
-			"position": []interface{}{0.0, 0.0, 0.0},
-			"radius":   1.0,
-			"color":    []interface{}{0.0, 0.0, 1.0},
+			"center": []interface{}{0.0, 0.0, 0.0},
+			"radius": 1.0,
+			"color":  []interface{}{0.0, 0.0, 1.0},
 		},
 	}
 	sm.AddShapes([]ShapeRequest{shape})
@@ -416,7 +416,7 @@ func TestUpdateShape(t *testing.T) {
 		ID:   "another_shape",
 		Type: "box",
 		Properties: map[string]interface{}{
-			"position":   []interface{}{2.0, 2.0, 2.0},
+			"center":     []interface{}{2.0, 2.0, 2.0},
 			"dimensions": []interface{}{1.0, 1.0, 1.0},
 		},
 	}})
@@ -436,15 +436,15 @@ func TestRemoveShape(t *testing.T) {
 			ID:   "shape1",
 			Type: "sphere",
 			Properties: map[string]interface{}{
-				"position": []interface{}{0.0, 0.0, 0.0},
-				"radius":   1.0,
+				"center": []interface{}{0.0, 0.0, 0.0},
+				"radius": 1.0,
 			},
 		},
 		{
 			ID:   "shape2",
 			Type: "box",
 			Properties: map[string]interface{}{
-				"position":   []interface{}{1.0, 1.0, 1.0},
+				"center":     []interface{}{1.0, 1.0, 1.0},
 				"dimensions": []interface{}{1.0, 1.0, 1.0},
 			},
 		},
@@ -452,8 +452,8 @@ func TestRemoveShape(t *testing.T) {
 			ID:   "shape3",
 			Type: "sphere",
 			Properties: map[string]interface{}{
-				"position": []interface{}{2.0, 2.0, 2.0},
-				"radius":   0.5,
+				"center": []interface{}{2.0, 2.0, 2.0},
+				"radius": 0.5,
 			},
 		},
 	}
@@ -560,24 +560,24 @@ func TestExtractFloatArray(t *testing.T) {
 	}{
 		{
 			name:     "valid 3-element array",
-			props:    map[string]interface{}{"position": []interface{}{1.0, 2.0, 3.0}},
-			key:      "position",
+			props:    map[string]interface{}{"center": []interface{}{1.0, 2.0, 3.0}},
+			key:      "center",
 			length:   3,
 			expected: []float64{1.0, 2.0, 3.0},
 			shouldOK: true,
 		},
 		{
 			name:     "wrong length",
-			props:    map[string]interface{}{"position": []interface{}{1.0, 2.0}},
-			key:      "position",
+			props:    map[string]interface{}{"center": []interface{}{1.0, 2.0}},
+			key:      "center",
 			length:   3,
 			expected: nil,
 			shouldOK: false,
 		},
 		{
 			name:     "non-float element",
-			props:    map[string]interface{}{"position": []interface{}{1.0, "invalid", 3.0}},
-			key:      "position",
+			props:    map[string]interface{}{"center": []interface{}{1.0, "invalid", 3.0}},
+			key:      "center",
 			length:   3,
 			expected: nil,
 			shouldOK: false,
@@ -585,15 +585,15 @@ func TestExtractFloatArray(t *testing.T) {
 		{
 			name:     "missing key",
 			props:    map[string]interface{}{"other": []interface{}{1.0, 2.0, 3.0}},
-			key:      "position",
+			key:      "center",
 			length:   3,
 			expected: nil,
 			shouldOK: false,
 		},
 		{
 			name:     "not an array",
-			props:    map[string]interface{}{"position": 1.0},
-			key:      "position",
+			props:    map[string]interface{}{"center": 1.0},
+			key:      "center",
 			length:   3,
 			expected: nil,
 			shouldOK: false,
@@ -750,7 +750,7 @@ func TestBoxRotation(t *testing.T) {
 				ID:   "simple_box",
 				Type: "box",
 				Properties: map[string]interface{}{
-					"position":   []interface{}{0.0, 0.0, 0.0},
+					"center":     []interface{}{0.0, 0.0, 0.0},
 					"dimensions": []interface{}{2.0, 1.0, 3.0},
 					"color":      []interface{}{1.0, 0.0, 0.0},
 				},
@@ -764,7 +764,7 @@ func TestBoxRotation(t *testing.T) {
 				ID:   "rotated_box",
 				Type: "box",
 				Properties: map[string]interface{}{
-					"position":   []interface{}{1.0, 2.0, 3.0},
+					"center":     []interface{}{1.0, 2.0, 3.0},
 					"dimensions": []interface{}{2.0, 1.0, 3.0},
 					"rotation":   []interface{}{0.5, 1.0, 0.0}, // radians
 					"color":      []interface{}{0.0, 1.0, 0.0},
@@ -779,7 +779,7 @@ func TestBoxRotation(t *testing.T) {
 				ID:   "bad_rotation_box",
 				Type: "box",
 				Properties: map[string]interface{}{
-					"position":   []interface{}{0.0, 0.0, 0.0},
+					"center":     []interface{}{0.0, 0.0, 0.0},
 					"dimensions": []interface{}{1.0, 1.0, 1.0},
 					"rotation":   []interface{}{0.5, "invalid"}, // Wrong type and count
 					"color":      []interface{}{0.0, 0.0, 1.0},
@@ -822,7 +822,7 @@ func TestToRaytracerSceneWithRotation(t *testing.T) {
 		ID:   "rotated_box",
 		Type: "box",
 		Properties: map[string]interface{}{
-			"position":   []interface{}{1.0, 2.0, 3.0},
+			"center":     []interface{}{1.0, 2.0, 3.0},
 			"dimensions": []interface{}{2.0, 1.0, 3.0},
 			"rotation":   []interface{}{0.5, 1.0, 0.0}, // radians
 			"color":      []interface{}{0.8, 0.2, 0.4},
@@ -835,7 +835,10 @@ func TestToRaytracerSceneWithRotation(t *testing.T) {
 	}
 
 	// Convert to raytracer scene
-	scene := sm.ToRaytracerScene()
+	scene, err := sm.ToRaytracerScene()
+	if err != nil {
+		t.Fatalf("ToRaytracerScene() returned error: %v", err)
+	}
 
 	if scene == nil {
 		t.Fatal("ToRaytracerScene() returned nil")
@@ -847,6 +850,73 @@ func TestToRaytracerSceneWithRotation(t *testing.T) {
 
 	// Test that scene can be created without errors
 	// (The actual raytracer functionality is tested by the raytracer library itself)
+}
+
+func TestQuadAndDiscCreation(t *testing.T) {
+	sm := NewSceneManager()
+
+	tests := []struct {
+		name  string
+		shape ShapeRequest
+	}{
+		{
+			name: "simple quad",
+			shape: ShapeRequest{
+				ID:   "test_quad",
+				Type: "quad",
+				Properties: map[string]interface{}{
+					"corner": []interface{}{-1.0, -1.0, 0.0},
+					"u":      []interface{}{2.0, 0.0, 0.0},
+					"v":      []interface{}{0.0, 2.0, 0.0},
+					"color":  []interface{}{0.8, 0.6, 0.4},
+				},
+			},
+		},
+		{
+			name: "simple disc",
+			shape: ShapeRequest{
+				ID:   "test_disc",
+				Type: "disc",
+				Properties: map[string]interface{}{
+					"center": []interface{}{0.0, 0.0, 0.0},
+					"normal": []interface{}{0.0, 0.0, 1.0},
+					"radius": 1.5,
+					"color":  []interface{}{0.9, 0.2, 0.3},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := sm.AddShapes([]ShapeRequest{tt.shape})
+			if err != nil {
+				t.Fatalf("Failed to add %s: %v", tt.shape.Type, err)
+			}
+
+			// Verify shape was added
+			found := sm.FindShape(tt.shape.ID)
+			if found == nil {
+				t.Errorf("Shape %s was not added", tt.shape.ID)
+			}
+
+			// Test scene conversion
+			scene, err := sm.ToRaytracerScene()
+			if err != nil {
+				t.Fatalf("ToRaytracerScene() returned error: %v", err)
+			}
+			if scene == nil {
+				t.Fatal("ToRaytracerScene() returned nil")
+			}
+
+			if len(scene.Shapes) != 1 {
+				t.Errorf("Expected 1 shape in scene, got %d", len(scene.Shapes))
+			}
+
+			// Clean up
+			sm.ClearScene()
+		})
+	}
 }
 
 // Tests for shape validation using table-driven tests
@@ -863,9 +933,9 @@ func TestValidateShapeProperties(t *testing.T) {
 				ID:   "valid_sphere",
 				Type: "sphere",
 				Properties: map[string]interface{}{
-					"position": []interface{}{0.0, 1.0, 2.0},
-					"radius":   1.5,
-					"color":    []interface{}{0.8, 0.2, 0.4},
+					"center": []interface{}{0.0, 1.0, 2.0},
+					"radius": 1.5,
+					"color":  []interface{}{0.8, 0.2, 0.4},
 				},
 			},
 			shouldError: false,
@@ -876,9 +946,37 @@ func TestValidateShapeProperties(t *testing.T) {
 				ID:   "valid_box",
 				Type: "box",
 				Properties: map[string]interface{}{
-					"position":   []interface{}{1.0, 2.0, 3.0},
+					"center":     []interface{}{1.0, 2.0, 3.0},
 					"dimensions": []interface{}{2.0, 1.5, 3.0},
 					"color":      []interface{}{0.1, 0.9, 0.3},
+				},
+			},
+			shouldError: false,
+		},
+		{
+			name: "valid quad",
+			shape: ShapeRequest{
+				ID:   "valid_quad",
+				Type: "quad",
+				Properties: map[string]interface{}{
+					"corner": []interface{}{0.0, 0.0, 0.0},
+					"u":      []interface{}{2.0, 0.0, 0.0},
+					"v":      []interface{}{0.0, 2.0, 0.0},
+					"color":  []interface{}{0.8, 0.8, 0.2},
+				},
+			},
+			shouldError: false,
+		},
+		{
+			name: "valid disc",
+			shape: ShapeRequest{
+				ID:   "valid_disc",
+				Type: "disc",
+				Properties: map[string]interface{}{
+					"center": []interface{}{1.0, 1.0, 1.0},
+					"normal": []interface{}{0.0, 1.0, 0.0},
+					"radius": 1.5,
+					"color":  []interface{}{0.9, 0.1, 0.7},
 				},
 			},
 			shouldError: false,
@@ -889,8 +987,8 @@ func TestValidateShapeProperties(t *testing.T) {
 				ID:   "",
 				Type: "sphere",
 				Properties: map[string]interface{}{
-					"position": []interface{}{0.0, 0.0, 0.0},
-					"radius":   1.0,
+					"center": []interface{}{0.0, 0.0, 0.0},
+					"radius": 1.0,
 				},
 			},
 			shouldError: true,
@@ -901,8 +999,8 @@ func TestValidateShapeProperties(t *testing.T) {
 				ID:   "test_shape",
 				Type: "",
 				Properties: map[string]interface{}{
-					"position": []interface{}{0.0, 0.0, 0.0},
-					"radius":   1.0,
+					"center": []interface{}{0.0, 0.0, 0.0},
+					"radius": 1.0,
 				},
 			},
 			shouldError: true,
@@ -922,7 +1020,7 @@ func TestValidateShapeProperties(t *testing.T) {
 				ID:   "triangle",
 				Type: "triangle",
 				Properties: map[string]interface{}{
-					"position": []interface{}{0.0, 0.0, 0.0},
+					"center":   []interface{}{0.0, 0.0, 0.0},
 					"vertices": []interface{}{},
 				},
 			},
@@ -934,8 +1032,8 @@ func TestValidateShapeProperties(t *testing.T) {
 				ID:   "incomplete_sphere",
 				Type: "sphere",
 				Properties: map[string]interface{}{
-					"position": []interface{}{0.0, 0.0, 0.0},
-					"color":    []interface{}{1.0, 0.0, 0.0},
+					"center": []interface{}{0.0, 0.0, 0.0},
+					"color":  []interface{}{1.0, 0.0, 0.0},
 				},
 			},
 			shouldError: true,
@@ -958,8 +1056,8 @@ func TestValidateShapeProperties(t *testing.T) {
 				ID:   "incomplete_box",
 				Type: "box",
 				Properties: map[string]interface{}{
-					"position": []interface{}{0.0, 0.0, 0.0},
-					"color":    []interface{}{1.0, 0.0, 0.0},
+					"center": []interface{}{0.0, 0.0, 0.0},
+					"color":  []interface{}{1.0, 0.0, 0.0},
 				},
 			},
 			shouldError: true,
@@ -970,8 +1068,8 @@ func TestValidateShapeProperties(t *testing.T) {
 				ID:   "bad_position",
 				Type: "sphere",
 				Properties: map[string]interface{}{
-					"position": []interface{}{0.0, "invalid"}, // Wrong type and count
-					"radius":   1.0,
+					"center": []interface{}{0.0, "invalid"}, // Wrong type and count
+					"radius": 1.0,
 				},
 			},
 			shouldError: true,
@@ -982,8 +1080,8 @@ func TestValidateShapeProperties(t *testing.T) {
 				ID:   "negative_sphere",
 				Type: "sphere",
 				Properties: map[string]interface{}{
-					"position": []interface{}{0.0, 0.0, 0.0},
-					"radius":   -1.0,
+					"center": []interface{}{0.0, 0.0, 0.0},
+					"radius": -1.0,
 				},
 			},
 			shouldError: true,
@@ -994,9 +1092,58 @@ func TestValidateShapeProperties(t *testing.T) {
 				ID:   "bad_color",
 				Type: "sphere",
 				Properties: map[string]interface{}{
-					"position": []interface{}{0.0, 0.0, 0.0},
-					"radius":   1.0,
-					"color":    []interface{}{1.5, 0.0, 0.0}, // Color > 1.0
+					"center": []interface{}{0.0, 0.0, 0.0},
+					"radius": 1.0,
+					"color":  []interface{}{1.5, 0.0, 0.0}, // Color > 1.0
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name: "quad without corner",
+			shape: ShapeRequest{
+				ID:   "incomplete_quad",
+				Type: "quad",
+				Properties: map[string]interface{}{
+					"u": []interface{}{1.0, 0.0, 0.0},
+					"v": []interface{}{0.0, 1.0, 0.0},
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name: "quad without u vector",
+			shape: ShapeRequest{
+				ID:   "incomplete_quad2",
+				Type: "quad",
+				Properties: map[string]interface{}{
+					"corner": []interface{}{0.0, 0.0, 0.0},
+					"v":      []interface{}{0.0, 1.0, 0.0},
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name: "disc without center",
+			shape: ShapeRequest{
+				ID:   "incomplete_disc",
+				Type: "disc",
+				Properties: map[string]interface{}{
+					"normal": []interface{}{0.0, 1.0, 0.0},
+					"radius": 1.0,
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name: "disc with negative radius",
+			shape: ShapeRequest{
+				ID:   "negative_disc",
+				Type: "disc",
+				Properties: map[string]interface{}{
+					"center": []interface{}{0.0, 0.0, 0.0},
+					"normal": []interface{}{0.0, 1.0, 0.0},
+					"radius": -1.0,
 				},
 			},
 			shouldError: true,
@@ -1025,8 +1172,8 @@ func TestValidateShapeProperties(t *testing.T) {
 			ID:   "existing_shape",
 			Type: "sphere",
 			Properties: map[string]interface{}{
-				"position": []interface{}{0.0, 0.0, 0.0},
-				"radius":   1.0,
+				"center": []interface{}{0.0, 0.0, 0.0},
+				"radius": 1.0,
 			},
 		}
 		err := sm.AddShapes([]ShapeRequest{first})
@@ -1039,7 +1186,7 @@ func TestValidateShapeProperties(t *testing.T) {
 			ID:   "existing_shape", // Same ID
 			Type: "box",
 			Properties: map[string]interface{}{
-				"position":   []interface{}{1.0, 1.0, 1.0},
+				"center":     []interface{}{1.0, 1.0, 1.0},
 				"dimensions": []interface{}{1.0, 1.0, 1.0},
 			},
 		}

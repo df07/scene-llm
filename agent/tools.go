@@ -55,12 +55,12 @@ func createShapeToolDeclaration() *genai.FunctionDeclaration {
 				},
 				"type": {
 					Type:        genai.TypeString,
-					Enum:        []string{"sphere", "box"},
+					Enum:        []string{"sphere", "box", "quad", "disc"},
 					Description: "The type of shape to create",
 				},
 				"properties": {
 					Type:        genai.TypeObject,
-					Description: "Shape-specific properties. For sphere: {position: [x,y,z], radius: number, color: [r,g,b]}. For box: {position: [x,y,z], dimensions: [w,h,d], color: [r,g,b], rotation: [x,y,z] (optional, degrees)}",
+					Description: "Shape-specific properties. For sphere: {center: [x,y,z], radius: number, color: [r,g,b]}. For box: {center: [x,y,z], dimensions: [w,h,d], color: [r,g,b], rotation: [x,y,z] (optional, degrees)}. For quad: {corner: [x,y,z], u: [x,y,z], v: [x,y,z], color: [r,g,b]} where corner is one corner and u,v are edge vectors. For disc: {center: [x,y,z], normal: [x,y,z], radius: number, color: [r,g,b]}",
 				},
 			},
 			Required: []string{"id", "type", "properties"},

@@ -23,9 +23,9 @@ func TestExecuteToolOperationWithoutAPI(t *testing.T) {
 				ID:   "test_sphere",
 				Type: "sphere",
 				Properties: map[string]interface{}{
-					"position": []interface{}{0.0, 0.0, 0.0},
-					"radius":   1.0,
-					"color":    []interface{}{1.0, 0.0, 0.0},
+					"center": []interface{}{0.0, 0.0, 0.0},
+					"radius": 1.0,
+					"color":  []interface{}{1.0, 0.0, 0.0},
 				},
 			},
 		}
@@ -191,8 +191,8 @@ func TestToolCallEventCreation(t *testing.T) {
 			ID:   "test_sphere",
 			Type: "sphere",
 			Properties: map[string]interface{}{
-				"position": []interface{}{0.0, 0.0, 0.0},
-				"radius":   1.0,
+				"center": []interface{}{0.0, 0.0, 0.0},
+				"radius": 1.0,
 			},
 		},
 	}

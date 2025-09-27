@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/df07/go-progressive-raytracer/pkg/core"
 	"github.com/df07/go-progressive-raytracer/pkg/geometry"
@@ -124,15 +125,15 @@ func validateShapeProperties(shape ShapeRequest) error {
 	switch shape.Type {
 	case "sphere":
 		// Validate required properties exist
-		if err := validateRequiredProperty(shape.Properties, "position", "sphere", shape.ID); err != nil {
+		if err := validateRequiredProperty(shape.Properties, "center", "sphere", shape.ID); err != nil {
 			return err
 		}
 		if err := validateRequiredProperty(shape.Properties, "radius", "sphere", shape.ID); err != nil {
 			return err
 		}
 
-		// Validate position is an array of 3 numbers
-		if err := validateFloatArray(shape.Properties, "position", 3, nil, nil, shape.ID); err != nil {
+		// Validate center is an array of 3 numbers
+		if err := validateFloatArray(shape.Properties, "center", 3, nil, nil, shape.ID); err != nil {
 			return err
 		}
 
@@ -147,15 +148,15 @@ func validateShapeProperties(shape ShapeRequest) error {
 
 	case "box":
 		// Validate required properties exist
-		if err := validateRequiredProperty(shape.Properties, "position", "box", shape.ID); err != nil {
+		if err := validateRequiredProperty(shape.Properties, "center", "box", shape.ID); err != nil {
 			return err
 		}
 		if err := validateRequiredProperty(shape.Properties, "dimensions", "box", shape.ID); err != nil {
 			return err
 		}
 
-		// Validate position is an array of 3 numbers
-		if err := validateFloatArray(shape.Properties, "position", 3, nil, nil, shape.ID); err != nil {
+		// Validate center is an array of 3 numbers
+		if err := validateFloatArray(shape.Properties, "center", 3, nil, nil, shape.ID); err != nil {
 			return err
 		}
 
@@ -163,6 +164,58 @@ func validateShapeProperties(shape ShapeRequest) error {
 		zero := 0.0
 		if err := validateFloatArray(shape.Properties, "dimensions", 3, &zero, nil, shape.ID); err != nil {
 			return err
+		}
+
+	case "quad":
+		// Validate required properties exist
+		if err := validateRequiredProperty(shape.Properties, "corner", "quad", shape.ID); err != nil {
+			return err
+		}
+		if err := validateRequiredProperty(shape.Properties, "u", "quad", shape.ID); err != nil {
+			return err
+		}
+		if err := validateRequiredProperty(shape.Properties, "v", "quad", shape.ID); err != nil {
+			return err
+		}
+
+		// Validate corner, u, and v are arrays of 3 numbers
+		if err := validateFloatArray(shape.Properties, "corner", 3, nil, nil, shape.ID); err != nil {
+			return err
+		}
+		if err := validateFloatArray(shape.Properties, "u", 3, nil, nil, shape.ID); err != nil {
+			return err
+		}
+		if err := validateFloatArray(shape.Properties, "v", 3, nil, nil, shape.ID); err != nil {
+			return err
+		}
+
+	case "disc":
+		// Validate required properties exist
+		if err := validateRequiredProperty(shape.Properties, "center", "disc", shape.ID); err != nil {
+			return err
+		}
+		if err := validateRequiredProperty(shape.Properties, "normal", "disc", shape.ID); err != nil {
+			return err
+		}
+		if err := validateRequiredProperty(shape.Properties, "radius", "disc", shape.ID); err != nil {
+			return err
+		}
+
+		// Validate center and normal are arrays of 3 numbers
+		if err := validateFloatArray(shape.Properties, "center", 3, nil, nil, shape.ID); err != nil {
+			return err
+		}
+		if err := validateFloatArray(shape.Properties, "normal", 3, nil, nil, shape.ID); err != nil {
+			return err
+		}
+
+		// Validate radius is a positive number
+		if radius, ok := extractFloat(shape.Properties, "radius"); ok {
+			if radius <= 0 {
+				return fmt.Errorf("disc '%s' radius must be positive", shape.ID)
+			}
+		} else {
+			return fmt.Errorf("disc '%s' radius must be a number", shape.ID)
 		}
 
 	default:
@@ -217,18 +270,23 @@ func (sm *SceneManager) updateCameraForShape(shape ShapeRequest) {
 	var size float64 = 2.0 // default size
 
 	if props := shape.Properties; props != nil {
-		// Try to get position
-		if posArray, ok := extractFloatArray(props, "position", 3); ok {
-			copy(position[:], posArray)
+		// Try to get position (try different property names)
+		if centerArray, ok := extractFloatArray(props, "center", 3); ok {
+			copy(position[:], centerArray) // For spheres, boxes, discs
+		} else if cornerArray, ok := extractFloatArray(props, "corner", 3); ok {
+			copy(position[:], cornerArray) // For quads
 		}
 
-		// Try to get size (radius for sphere, dimensions for box, etc.)
+		// Try to get size (radius for sphere/disc, dimensions for box, edge vectors for quad)
 		if radius, ok := extractFloat(props, "radius"); ok {
 			size = radius
 		} else if sizeVal, ok := extractFloat(props, "size"); ok {
 			size = sizeVal
 		} else if dimsArray, ok := extractFloatArray(props, "dimensions", 3); ok {
 			size = dimsArray[0] // Use first dimension as representative size
+		} else if uArray, ok := extractFloatArray(props, "u", 3); ok {
+			// For quads, use the length of the u vector as representative size
+			size = math.Sqrt(uArray[0]*uArray[0] + uArray[1]*uArray[1] + uArray[2]*uArray[2])
 		}
 	}
 
@@ -276,11 +334,32 @@ func (sm *SceneManager) BuildContext() string {
 	} else {
 		sceneContext += fmt.Sprintf("%d shapes: ", len(sm.state.Shapes))
 		for i, shape := range sm.state.Shapes {
-			// Extract properties using helper function
-			position, size, color := extractShapeProperties(shape)
+			// Extract properties directly
+			var center [3]float64
+			var size float64 = 1.0
+			var color [3]float64 = [3]float64{0.5, 0.5, 0.5}
+
+			// Extract center (or corner for quads)
+			if centerArray, ok := extractFloatArray(shape.Properties, "center", 3); ok {
+				copy(center[:], centerArray)
+			} else if cornerArray, ok := extractFloatArray(shape.Properties, "corner", 3); ok {
+				copy(center[:], cornerArray) // Use corner as position for display
+			}
+
+			// Extract size/radius
+			if radius, ok := extractFloat(shape.Properties, "radius"); ok {
+				size = radius
+			} else if dimsArray, ok := extractFloatArray(shape.Properties, "dimensions", 3); ok {
+				size = dimsArray[0] // Use first dimension as representative size
+			}
+
+			// Extract color
+			if colorArray, ok := extractFloatArray(shape.Properties, "color", 3); ok {
+				copy(color[:], colorArray)
+			}
 
 			sceneContext += fmt.Sprintf("%s) %s (ID: %s) at [%.1f,%.1f,%.1f] size %.1f color [%.1f,%.1f,%.1f]",
-				fmt.Sprintf("%d", i+1), shape.Type, shape.ID, position[0], position[1], position[2],
+				fmt.Sprintf("%d", i+1), shape.Type, shape.ID, center[0], center[1], center[2],
 				size, color[0], color[1], color[2])
 			if i < len(sm.state.Shapes)-1 {
 				sceneContext += ", "
@@ -364,41 +443,8 @@ func (sm *SceneManager) RemoveShape(id string) error {
 	return fmt.Errorf("shape with ID '%s' not found", id)
 }
 
-// extractShapeProperties extracts common properties from a shape's Properties map
-func extractShapeProperties(shape ShapeRequest) (position [3]float64, size float64, color [3]float64) {
-	// Default values
-	position = [3]float64{0, 0, 0}
-	size = 1.0
-	color = [3]float64{0.5, 0.5, 0.5} // Gray default
-
-	if shape.Properties == nil {
-		return
-	}
-
-	// Extract position
-	if posArray, ok := extractFloatArray(shape.Properties, "position", 3); ok {
-		copy(position[:], posArray)
-	}
-
-	// Extract size/radius
-	if radius, ok := extractFloat(shape.Properties, "radius"); ok {
-		size = radius
-	} else if sizeVal, ok := extractFloat(shape.Properties, "size"); ok {
-		size = sizeVal
-	} else if dimsArray, ok := extractFloatArray(shape.Properties, "dimensions", 3); ok {
-		size = dimsArray[0] // Use first dimension as representative size
-	}
-
-	// Extract color
-	if colorArray, ok := extractFloatArray(shape.Properties, "color", 3); ok {
-		copy(color[:], colorArray)
-	}
-
-	return
-}
-
 // ToRaytracerScene converts the scene state to a raytracer scene
-func (sm *SceneManager) ToRaytracerScene() *scene.Scene {
+func (sm *SceneManager) ToRaytracerScene() (*scene.Scene, error) {
 	// Scene configuration
 	samplingConfig := scene.SamplingConfig{
 		Width:                     400,
@@ -426,8 +472,21 @@ func (sm *SceneManager) ToRaytracerScene() *scene.Scene {
 	// Create shapes
 	var sceneShapes []geometry.Shape
 	for _, shapeReq := range sm.state.Shapes {
-		// Extract properties using helper function
-		position, size, color := extractShapeProperties(shapeReq)
+		// Extract common properties
+		var color [3]float64 = [3]float64{0.5, 0.5, 0.5} // Default gray
+		var size float64 = 1.0                           // Default size
+
+		// Extract color
+		if colorArray, ok := extractFloatArray(shapeReq.Properties, "color", 3); ok {
+			copy(color[:], colorArray)
+		}
+
+		// Extract size/radius (used for default values)
+		if radius, ok := extractFloat(shapeReq.Properties, "radius"); ok {
+			size = radius
+		} else if dimsArray, ok := extractFloatArray(shapeReq.Properties, "dimensions", 3); ok {
+			size = dimsArray[0] // Use first dimension as representative size
+		}
 
 		// Create material with requested color
 		shapeMaterial := material.NewLambertian(core.NewVec3(color[0], color[1], color[2]))
@@ -436,22 +495,31 @@ func (sm *SceneManager) ToRaytracerScene() *scene.Scene {
 		var shape geometry.Shape
 		switch shapeReq.Type {
 		case "sphere":
+			// Extract center
+			var center [3]float64
+			if centerArray, ok := extractFloatArray(shapeReq.Properties, "center", 3); ok {
+				copy(center[:], centerArray)
+			}
+
 			shape = geometry.NewSphere(
-				core.NewVec3(position[0], position[1], position[2]),
+				core.NewVec3(center[0], center[1], center[2]),
 				size,
 				shapeMaterial,
 			)
 		case "box":
-			// Extract dimensions from properties
+			// Extract center
+			var center [3]float64
+			if centerArray, ok := extractFloatArray(shapeReq.Properties, "center", 3); ok {
+				copy(center[:], centerArray)
+			}
+
+			// Extract dimensions
 			var dimensions [3]float64
 			if dimsArray, ok := extractFloatArray(shapeReq.Properties, "dimensions", 3); ok {
 				// Convert to half-extents
 				dimensions[0] = dimsArray[0] / 2.0
 				dimensions[1] = dimsArray[1] / 2.0
 				dimensions[2] = dimsArray[2] / 2.0
-			} else {
-				// Fallback to uniform cube using size
-				dimensions = [3]float64{size / 2, size / 2, size / 2}
 			}
 
 			// Check for optional rotation (in radians)
@@ -464,25 +532,73 @@ func (sm *SceneManager) ToRaytracerScene() *scene.Scene {
 
 			if hasRotation {
 				shape = geometry.NewBox(
-					core.NewVec3(position[0], position[1], position[2]),
+					core.NewVec3(center[0], center[1], center[2]),
 					core.NewVec3(dimensions[0], dimensions[1], dimensions[2]),
 					core.NewVec3(rotation[0], rotation[1], rotation[2]),
 					shapeMaterial,
 				)
 			} else {
 				shape = geometry.NewAxisAlignedBox(
-					core.NewVec3(position[0], position[1], position[2]),
+					core.NewVec3(center[0], center[1], center[2]),
 					core.NewVec3(dimensions[0], dimensions[1], dimensions[2]),
 					shapeMaterial,
 				)
 			}
-		default:
-			// Default to sphere
-			shape = geometry.NewSphere(
-				core.NewVec3(position[0], position[1], position[2]),
-				size,
+		case "quad":
+			// Extract corner, u, and v vectors
+			var corner, u, v [3]float64
+			if cornerArray, ok := extractFloatArray(shapeReq.Properties, "corner", 3); ok {
+				copy(corner[:], cornerArray)
+			}
+
+			if uArray, ok := extractFloatArray(shapeReq.Properties, "u", 3); ok {
+				copy(u[:], uArray)
+			} else {
+				// Default u vector (right direction)
+				u = [3]float64{size, 0, 0}
+			}
+
+			if vArray, ok := extractFloatArray(shapeReq.Properties, "v", 3); ok {
+				copy(v[:], vArray)
+			} else {
+				// Default v vector (up direction)
+				v = [3]float64{0, size, 0}
+			}
+
+			shape = geometry.NewQuad(
+				core.NewVec3(corner[0], corner[1], corner[2]),
+				core.NewVec3(u[0], u[1], u[2]),
+				core.NewVec3(v[0], v[1], v[2]),
 				shapeMaterial,
 			)
+		case "disc":
+			// Extract center, normal, and radius
+			var center, normal [3]float64
+			var radius float64
+
+			if centerArray, ok := extractFloatArray(shapeReq.Properties, "center", 3); ok {
+				copy(center[:], centerArray)
+			}
+
+			if normalArray, ok := extractFloatArray(shapeReq.Properties, "normal", 3); ok {
+				copy(normal[:], normalArray)
+			} else {
+				// Default normal (up direction)
+				normal = [3]float64{0, 1, 0}
+			}
+
+			if r, ok := extractFloat(shapeReq.Properties, "radius"); ok {
+				radius = r
+			}
+
+			shape = geometry.NewDisc(
+				core.NewVec3(center[0], center[1], center[2]),
+				core.NewVec3(normal[0], normal[1], normal[2]),
+				radius,
+				shapeMaterial,
+			)
+		default:
+			return nil, fmt.Errorf("unsupported shape type: %s", shapeReq.Type)
 		}
 		sceneShapes = append(sceneShapes, shape)
 	}
@@ -501,5 +617,5 @@ func (sm *SceneManager) ToRaytracerScene() *scene.Scene {
 		core.NewVec3(1.0, 1.0, 1.0), // bottomColor (white horizon)
 	)
 
-	return sceneWithShapes
+	return sceneWithShapes, nil
 }

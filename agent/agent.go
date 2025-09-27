@@ -103,8 +103,12 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Conten
 
 	// Emit scene render event if any operations were performed
 	if hasShapeOperations {
-		raytracerScene := a.sceneManager.ToRaytracerScene()
-		a.events <- NewSceneRenderEvent(raytracerScene)
+		raytracerScene, err := a.sceneManager.ToRaytracerScene()
+		if err != nil {
+			a.events <- NewErrorEvent(fmt.Errorf("failed to create scene: %w", err))
+		} else {
+			a.events <- NewSceneRenderEvent(raytracerScene)
+		}
 	}
 
 	// Send completion event
