@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"google.golang.org/genai"
@@ -58,8 +59,8 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Conten
 	// Prepare tools
 	tools := []*genai.Tool{{FunctionDeclarations: getAllToolDeclarations()}}
 
-	// Generate content with function calling
-	result, err := a.client.Models.GenerateContent(ctx, "gemini-2.5-flash", contextualizedConversation, &genai.GenerateContentConfig{
+	// Generate content with function calling and retry logic
+	result, err := a.generateContentWithRetry(ctx, "gemini-2.5-flash", contextualizedConversation, &genai.GenerateContentConfig{
 		Tools: tools,
 	})
 	if err != nil {
@@ -176,6 +177,51 @@ func (a *Agent) addSceneContext(conversation []*genai.Content, sceneContext stri
 	}
 
 	return contextualizedConversation
+}
+
+// generateContentWithRetry wraps the GenerateContent call with retry logic for transient errors
+func (a *Agent) generateContentWithRetry(ctx context.Context, model string, conversation []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
+	const maxRetries = 3
+	const baseDelay = 1 * time.Second
+
+	var lastErr error
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		result, err := a.client.Models.GenerateContent(ctx, model, conversation, config)
+		if err == nil {
+			if attempt > 0 {
+				log.Printf("Gemini API call succeeded on attempt %d", attempt+1)
+			}
+			return result, nil
+		}
+
+		lastErr = err
+		errStr := strings.ToLower(err.Error())
+
+		// Check if this is a transient network error worth retrying
+		isRetryable := strings.Contains(errStr, "connection reset by peer") ||
+			strings.Contains(errStr, "connection refused") ||
+			strings.Contains(errStr, "timeout") ||
+			strings.Contains(errStr, "temporary failure") ||
+			strings.Contains(errStr, "network error")
+
+		if !isRetryable || attempt == maxRetries-1 {
+			// Don't retry for non-network errors or on final attempt
+			break
+		}
+
+		delay := baseDelay * time.Duration(1<<uint(attempt)) // Exponential backoff: 1s, 2s, 4s
+		log.Printf("Gemini API call failed (attempt %d/%d): %v. Retrying in %v...", attempt+1, maxRetries, err, delay)
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(delay):
+			// Continue to next retry
+		}
+	}
+
+	return nil, lastErr
 }
 
 // Close cleans up the agent resources
