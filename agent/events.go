@@ -152,3 +152,31 @@ type SetEnvironmentLightingOperation struct {
 
 func (op SetEnvironmentLightingOperation) ToolName() string { return "set_environment_lighting" }
 func (op SetEnvironmentLightingOperation) Target() string   { return "" }
+
+type CreateLightOperation struct {
+	Light    LightRequest `json:"light"`
+	ToolType string       `json:"tool_name"` // For JSON serialization
+}
+
+func (op CreateLightOperation) ToolName() string { return "create_light" }
+func (op CreateLightOperation) Target() string   { return op.Light.ID }
+
+type UpdateLightOperation struct {
+	ID       string                 `json:"id"`
+	Updates  map[string]interface{} `json:"updates"`
+	Before   *LightRequest          `json:"before,omitempty"` // Populated by agent after execution
+	After    *LightRequest          `json:"after,omitempty"`  // Populated by agent after execution
+	ToolType string                 `json:"tool_name"`        // For JSON serialization
+}
+
+func (op UpdateLightOperation) ToolName() string { return "update_light" }
+func (op UpdateLightOperation) Target() string   { return op.ID }
+
+type RemoveLightOperation struct {
+	ID           string        `json:"id"`
+	RemovedLight *LightRequest `json:"removed_light,omitempty"` // Populated by agent after execution
+	ToolType     string        `json:"tool_name"`               // For JSON serialization
+}
+
+func (op RemoveLightOperation) ToolName() string { return "remove_light" }
+func (op RemoveLightOperation) Target() string   { return op.ID }

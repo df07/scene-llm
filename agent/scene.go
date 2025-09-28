@@ -235,6 +235,242 @@ func validateShapeProperties(shape ShapeRequest) error {
 	return nil
 }
 
+// validateLightProperties validates a light's structure and properties
+func validateLightProperties(light LightRequest) error {
+	// Validate basic fields
+	if light.ID == "" {
+		return fmt.Errorf("light ID cannot be empty")
+	}
+	if light.Type == "" {
+		return fmt.Errorf("light type cannot be empty for light '%s'", light.ID)
+	}
+	if light.Properties == nil {
+		return fmt.Errorf("light properties cannot be nil for light '%s'", light.ID)
+	}
+
+	// Validate type-specific properties
+	switch light.Type {
+	case "point_spot_light":
+		// Required: center, emission
+		// Optional: direction, cutoff_angle, falloff_exponent
+		if err := validateRequiredProperty(light.Properties, "center", "point_spot_light", light.ID); err != nil {
+			return err
+		}
+		if err := validateRequiredProperty(light.Properties, "emission", "point_spot_light", light.ID); err != nil {
+			return err
+		}
+
+		// Validate center is array of 3 numbers
+		if err := validateFloatArray(light.Properties, "center", 3, nil, nil, light.ID); err != nil {
+			return err
+		}
+
+		// Validate emission is array of 3 positive numbers
+		zero := 0.0
+		if err := validateFloatArray(light.Properties, "emission", 3, &zero, nil, light.ID); err != nil {
+			return err
+		}
+
+		// Validate optional direction (if present)
+		if hasProperty(light.Properties, "direction") {
+			if err := validateFloatArray(light.Properties, "direction", 3, nil, nil, light.ID); err != nil {
+				return err
+			}
+		}
+
+		// Validate optional cutoff_angle (if present)
+		if hasProperty(light.Properties, "cutoff_angle") {
+			if angle, ok := extractFloat(light.Properties, "cutoff_angle"); ok {
+				if angle <= 0 || angle > 180 {
+					return fmt.Errorf("point_spot_light '%s' cutoff_angle must be between 0 and 180 degrees", light.ID)
+				}
+			} else {
+				return fmt.Errorf("point_spot_light '%s' cutoff_angle must be a number", light.ID)
+			}
+		}
+
+		// Validate optional falloff_exponent (if present)
+		if hasProperty(light.Properties, "falloff_exponent") {
+			if exponent, ok := extractFloat(light.Properties, "falloff_exponent"); ok {
+				if exponent < 0 {
+					return fmt.Errorf("point_spot_light '%s' falloff_exponent must be >= 0", light.ID)
+				}
+			} else {
+				return fmt.Errorf("point_spot_light '%s' falloff_exponent must be a number", light.ID)
+			}
+		}
+
+	case "area_quad_light":
+		// Required: corner, u, v, emission
+		if err := validateRequiredProperty(light.Properties, "corner", "area_quad_light", light.ID); err != nil {
+			return err
+		}
+		if err := validateRequiredProperty(light.Properties, "u", "area_quad_light", light.ID); err != nil {
+			return err
+		}
+		if err := validateRequiredProperty(light.Properties, "v", "area_quad_light", light.ID); err != nil {
+			return err
+		}
+		if err := validateRequiredProperty(light.Properties, "emission", "area_quad_light", light.ID); err != nil {
+			return err
+		}
+
+		// Validate all are arrays of 3 numbers
+		if err := validateFloatArray(light.Properties, "corner", 3, nil, nil, light.ID); err != nil {
+			return err
+		}
+		if err := validateFloatArray(light.Properties, "u", 3, nil, nil, light.ID); err != nil {
+			return err
+		}
+		if err := validateFloatArray(light.Properties, "v", 3, nil, nil, light.ID); err != nil {
+			return err
+		}
+
+		// Validate emission is array of 3 positive numbers
+		zero := 0.0
+		if err := validateFloatArray(light.Properties, "emission", 3, &zero, nil, light.ID); err != nil {
+			return err
+		}
+
+	case "area_disc_light":
+		// Required: center, normal, radius, emission
+		if err := validateRequiredProperty(light.Properties, "center", "area_disc_light", light.ID); err != nil {
+			return err
+		}
+		if err := validateRequiredProperty(light.Properties, "normal", "area_disc_light", light.ID); err != nil {
+			return err
+		}
+		if err := validateRequiredProperty(light.Properties, "radius", "area_disc_light", light.ID); err != nil {
+			return err
+		}
+		if err := validateRequiredProperty(light.Properties, "emission", "area_disc_light", light.ID); err != nil {
+			return err
+		}
+
+		// Validate center and normal are arrays of 3 numbers
+		if err := validateFloatArray(light.Properties, "center", 3, nil, nil, light.ID); err != nil {
+			return err
+		}
+		if err := validateFloatArray(light.Properties, "normal", 3, nil, nil, light.ID); err != nil {
+			return err
+		}
+
+		// Validate radius is a positive number
+		if radius, ok := extractFloat(light.Properties, "radius"); ok {
+			if radius <= 0 {
+				return fmt.Errorf("area_disc_light '%s' radius must be positive", light.ID)
+			}
+		} else {
+			return fmt.Errorf("area_disc_light '%s' radius must be a number", light.ID)
+		}
+
+		// Validate emission is array of 3 positive numbers
+		zero := 0.0
+		if err := validateFloatArray(light.Properties, "emission", 3, &zero, nil, light.ID); err != nil {
+			return err
+		}
+
+	case "area_sphere_light":
+		// Required: center, radius, emission
+		if err := validateRequiredProperty(light.Properties, "center", "area_sphere_light", light.ID); err != nil {
+			return err
+		}
+		if err := validateRequiredProperty(light.Properties, "radius", "area_sphere_light", light.ID); err != nil {
+			return err
+		}
+		if err := validateRequiredProperty(light.Properties, "emission", "area_sphere_light", light.ID); err != nil {
+			return err
+		}
+
+		// Validate center is array of 3 numbers
+		if err := validateFloatArray(light.Properties, "center", 3, nil, nil, light.ID); err != nil {
+			return err
+		}
+
+		// Validate radius is a positive number
+		if radius, ok := extractFloat(light.Properties, "radius"); ok {
+			if radius <= 0 {
+				return fmt.Errorf("area_sphere_light '%s' radius must be positive", light.ID)
+			}
+		} else {
+			return fmt.Errorf("area_sphere_light '%s' radius must be a number", light.ID)
+		}
+
+		// Validate emission is array of 3 positive numbers
+		zero := 0.0
+		if err := validateFloatArray(light.Properties, "emission", 3, &zero, nil, light.ID); err != nil {
+			return err
+		}
+
+	case "area_disc_spot_light":
+		// Required: center, normal, radius, emission, cutoff_angle, falloff_exponent
+		if err := validateRequiredProperty(light.Properties, "center", "area_disc_spot_light", light.ID); err != nil {
+			return err
+		}
+		if err := validateRequiredProperty(light.Properties, "normal", "area_disc_spot_light", light.ID); err != nil {
+			return err
+		}
+		if err := validateRequiredProperty(light.Properties, "radius", "area_disc_spot_light", light.ID); err != nil {
+			return err
+		}
+		if err := validateRequiredProperty(light.Properties, "emission", "area_disc_spot_light", light.ID); err != nil {
+			return err
+		}
+		if err := validateRequiredProperty(light.Properties, "cutoff_angle", "area_disc_spot_light", light.ID); err != nil {
+			return err
+		}
+		if err := validateRequiredProperty(light.Properties, "falloff_exponent", "area_disc_spot_light", light.ID); err != nil {
+			return err
+		}
+
+		// Validate center and normal are arrays of 3 numbers
+		if err := validateFloatArray(light.Properties, "center", 3, nil, nil, light.ID); err != nil {
+			return err
+		}
+		if err := validateFloatArray(light.Properties, "normal", 3, nil, nil, light.ID); err != nil {
+			return err
+		}
+
+		// Validate radius is a positive number
+		if radius, ok := extractFloat(light.Properties, "radius"); ok {
+			if radius <= 0 {
+				return fmt.Errorf("area_disc_spot_light '%s' radius must be positive", light.ID)
+			}
+		} else {
+			return fmt.Errorf("area_disc_spot_light '%s' radius must be a number", light.ID)
+		}
+
+		// Validate emission is array of 3 positive numbers
+		zero := 0.0
+		if err := validateFloatArray(light.Properties, "emission", 3, &zero, nil, light.ID); err != nil {
+			return err
+		}
+
+		// Validate cutoff_angle
+		if angle, ok := extractFloat(light.Properties, "cutoff_angle"); ok {
+			if angle <= 0 || angle > 180 {
+				return fmt.Errorf("area_disc_spot_light '%s' cutoff_angle must be between 0 and 180 degrees", light.ID)
+			}
+		} else {
+			return fmt.Errorf("area_disc_spot_light '%s' cutoff_angle must be a number", light.ID)
+		}
+
+		// Validate falloff_exponent
+		if exponent, ok := extractFloat(light.Properties, "falloff_exponent"); ok {
+			if exponent < 0 {
+				return fmt.Errorf("area_disc_spot_light '%s' falloff_exponent must be >= 0", light.ID)
+			}
+		} else {
+			return fmt.Errorf("area_disc_spot_light '%s' falloff_exponent must be a number", light.ID)
+		}
+
+	default:
+		return fmt.Errorf("unsupported light type '%s' for light '%s'", light.Type, light.ID)
+	}
+
+	return nil
+}
+
 // AddShapes adds shapes to the scene and updates camera positioning
 func (sm *SceneManager) AddShapes(shapes []ShapeRequest) error {
 	if len(shapes) == 0 {
@@ -444,6 +680,110 @@ func (sm *SceneManager) RemoveShape(id string) error {
 	return fmt.Errorf("shape with ID '%s' not found", id)
 }
 
+// AddLights adds lights to the scene
+func (sm *SceneManager) AddLights(lights []LightRequest) error {
+	if len(lights) == 0 {
+		return nil
+	}
+
+	// Validate unique IDs and light properties
+	for _, newLight := range lights {
+		// Validate light properties
+		if err := validateLightProperties(newLight); err != nil {
+			return err
+		}
+
+		// Check for ID uniqueness
+		if sm.FindLight(newLight.ID) != nil {
+			return fmt.Errorf("light with ID '%s' already exists", newLight.ID)
+		}
+	}
+
+	// Add all lights if validation passes
+	sm.state.Lights = append(sm.state.Lights, lights...)
+	return nil
+}
+
+// FindLight returns a light by its ID, or nil if not found
+func (sm *SceneManager) FindLight(id string) *LightRequest {
+	for i := range sm.state.Lights {
+		if sm.state.Lights[i].ID == id {
+			return &sm.state.Lights[i]
+		}
+	}
+	return nil
+}
+
+// UpdateLight updates an existing light with the provided changes
+func (sm *SceneManager) UpdateLight(id string, updates map[string]interface{}) error {
+	light := sm.FindLight(id)
+	if light == nil {
+		return fmt.Errorf("light with ID '%s' not found", id)
+	}
+
+	// Apply updates to the light
+	for key, value := range updates {
+		switch key {
+		case "id":
+			newID, ok := value.(string)
+			if !ok {
+				return fmt.Errorf("new ID must be a string")
+			}
+
+			// Check that new ID is unique (unless it's the same as current)
+			if newID != light.ID && sm.FindLight(newID) != nil {
+				return fmt.Errorf("light with ID '%s' already exists", newID)
+			}
+
+			light.ID = newID
+
+		case "type":
+			newType, ok := value.(string)
+			if !ok {
+				return fmt.Errorf("light type must be a string")
+			}
+			light.Type = newType
+
+		case "properties":
+			newProps, ok := value.(map[string]interface{})
+			if !ok {
+				return fmt.Errorf("properties must be an object")
+			}
+
+			// Update properties by merging
+			if light.Properties == nil {
+				light.Properties = make(map[string]interface{})
+			}
+			for propKey, propValue := range newProps {
+				light.Properties[propKey] = propValue
+			}
+
+		default:
+			return fmt.Errorf("unknown field '%s' for light update", key)
+		}
+	}
+
+	// Validate the updated light
+	if err := validateLightProperties(*light); err != nil {
+		return fmt.Errorf("updated light validation failed: %w", err)
+	}
+
+	return nil
+}
+
+// RemoveLight removes a light from the scene by its ID
+func (sm *SceneManager) RemoveLight(id string) error {
+	for i := range sm.state.Lights {
+		if sm.state.Lights[i].ID == id {
+			// Remove light by slicing
+			sm.state.Lights = append(sm.state.Lights[:i], sm.state.Lights[i+1:]...)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("light with ID '%s' not found", id)
+}
+
 // SetEnvironmentLighting sets the background/environment lighting for the scene
 func (sm *SceneManager) SetEnvironmentLighting(lightingType string, topColor, bottomColor, emission []float64) error {
 	// Validate lighting type
@@ -586,6 +926,176 @@ func (sm *SceneManager) addLightToScene(raytracerScene *scene.Scene, lightReq Li
 
 		raytracerScene.AddUniformInfiniteLight(
 			core.NewVec3(emission[0], emission[1], emission[2]),
+		)
+
+	case "point_spot_light":
+		// Extract required properties
+		center, ok := extractFloatArray(lightReq.Properties, "center", 3)
+		if !ok {
+			return fmt.Errorf("point_spot_light requires center property")
+		}
+		emission, ok := extractFloatArray(lightReq.Properties, "emission", 3)
+		if !ok {
+			return fmt.Errorf("point_spot_light requires emission property")
+		}
+
+		// Extract optional properties
+		direction, hasDirection := extractFloatArray(lightReq.Properties, "direction", 3)
+		cutoffAngle, hasCutoff := extractFloat(lightReq.Properties, "cutoff_angle")
+		falloffExponent, hasFalloff := extractFloat(lightReq.Properties, "falloff_exponent")
+
+		// Set defaults for optional parameters
+		if !hasDirection {
+			direction = []float64{0, -1, 0} // Default downward direction
+		}
+		if !hasCutoff {
+			cutoffAngle = 45.0 // Default 45 degree cone
+		}
+		if !hasFalloff {
+			falloffExponent = 5.0 // Default sharp falloff
+		}
+
+		// Calculate target point from center and direction
+		to := core.NewVec3(
+			center[0]+direction[0],
+			center[1]+direction[1],
+			center[2]+direction[2],
+		)
+
+		raytracerScene.AddPointSpotLight(
+			core.NewVec3(center[0], center[1], center[2]),
+			to,
+			core.NewVec3(emission[0], emission[1], emission[2]),
+			cutoffAngle,
+			falloffExponent,
+			0.0, // Point light has no radius
+		)
+
+	case "area_quad_light":
+		// Extract required properties
+		corner, ok := extractFloatArray(lightReq.Properties, "corner", 3)
+		if !ok {
+			return fmt.Errorf("area_quad_light requires corner property")
+		}
+		u, ok := extractFloatArray(lightReq.Properties, "u", 3)
+		if !ok {
+			return fmt.Errorf("area_quad_light requires u property")
+		}
+		v, ok := extractFloatArray(lightReq.Properties, "v", 3)
+		if !ok {
+			return fmt.Errorf("area_quad_light requires v property")
+		}
+		emission, ok := extractFloatArray(lightReq.Properties, "emission", 3)
+		if !ok {
+			return fmt.Errorf("area_quad_light requires emission property")
+		}
+
+		raytracerScene.AddQuadLight(
+			core.NewVec3(corner[0], corner[1], corner[2]),
+			core.NewVec3(u[0], u[1], u[2]),
+			core.NewVec3(v[0], v[1], v[2]),
+			core.NewVec3(emission[0], emission[1], emission[2]),
+		)
+
+	case "area_disc_light":
+		// For now, we'll create a disc light using spot light with wide angle
+		// Extract required properties
+		center, ok := extractFloatArray(lightReq.Properties, "center", 3)
+		if !ok {
+			return fmt.Errorf("area_disc_light requires center property")
+		}
+		normal, ok := extractFloatArray(lightReq.Properties, "normal", 3)
+		if !ok {
+			return fmt.Errorf("area_disc_light requires normal property")
+		}
+		radius, ok := extractFloat(lightReq.Properties, "radius")
+		if !ok {
+			return fmt.Errorf("area_disc_light requires radius property")
+		}
+		emission, ok := extractFloatArray(lightReq.Properties, "emission", 3)
+		if !ok {
+			return fmt.Errorf("area_disc_light requires emission property")
+		}
+
+		// Calculate target point from center and normal
+		to := core.NewVec3(
+			center[0]+normal[0],
+			center[1]+normal[1],
+			center[2]+normal[2],
+		)
+
+		// Use AddSpotLight with wide angle (170 degrees) to simulate disc area light
+		raytracerScene.AddSpotLight(
+			core.NewVec3(center[0], center[1], center[2]),
+			to,
+			core.NewVec3(emission[0], emission[1], emission[2]),
+			170.0, // Wide cone angle to approximate disc area light
+			2.0,   // Gentle falloff
+			radius,
+		)
+
+	case "area_sphere_light":
+		// Extract required properties
+		center, ok := extractFloatArray(lightReq.Properties, "center", 3)
+		if !ok {
+			return fmt.Errorf("area_sphere_light requires center property")
+		}
+		radius, ok := extractFloat(lightReq.Properties, "radius")
+		if !ok {
+			return fmt.Errorf("area_sphere_light requires radius property")
+		}
+		emission, ok := extractFloatArray(lightReq.Properties, "emission", 3)
+		if !ok {
+			return fmt.Errorf("area_sphere_light requires emission property")
+		}
+
+		raytracerScene.AddSphereLight(
+			core.NewVec3(center[0], center[1], center[2]),
+			radius,
+			core.NewVec3(emission[0], emission[1], emission[2]),
+		)
+
+	case "area_disc_spot_light":
+		// Extract required properties
+		center, ok := extractFloatArray(lightReq.Properties, "center", 3)
+		if !ok {
+			return fmt.Errorf("area_disc_spot_light requires center property")
+		}
+		normal, ok := extractFloatArray(lightReq.Properties, "normal", 3)
+		if !ok {
+			return fmt.Errorf("area_disc_spot_light requires normal property")
+		}
+		radius, ok := extractFloat(lightReq.Properties, "radius")
+		if !ok {
+			return fmt.Errorf("area_disc_spot_light requires radius property")
+		}
+		emission, ok := extractFloatArray(lightReq.Properties, "emission", 3)
+		if !ok {
+			return fmt.Errorf("area_disc_spot_light requires emission property")
+		}
+		cutoffAngle, ok := extractFloat(lightReq.Properties, "cutoff_angle")
+		if !ok {
+			return fmt.Errorf("area_disc_spot_light requires cutoff_angle property")
+		}
+		falloffExponent, ok := extractFloat(lightReq.Properties, "falloff_exponent")
+		if !ok {
+			return fmt.Errorf("area_disc_spot_light requires falloff_exponent property")
+		}
+
+		// Calculate target point from center and normal
+		to := core.NewVec3(
+			center[0]+normal[0],
+			center[1]+normal[1],
+			center[2]+normal[2],
+		)
+
+		raytracerScene.AddSpotLight(
+			core.NewVec3(center[0], center[1], center[2]),
+			to,
+			core.NewVec3(emission[0], emission[1], emission[2]),
+			cutoffAngle,
+			falloffExponent,
+			radius,
 		)
 
 	default:

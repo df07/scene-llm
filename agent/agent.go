@@ -147,6 +147,29 @@ func (a *Agent) executeToolOperation(operation ToolOperation) {
 		err = a.sceneManager.RemoveShape(op.ID)
 	case *SetEnvironmentLightingOperation:
 		err = a.sceneManager.SetEnvironmentLighting(op.LightingType, op.TopColor, op.BottomColor, op.Emission)
+	case *CreateLightOperation:
+		err = a.sceneManager.AddLights([]LightRequest{op.Light})
+	case *UpdateLightOperation:
+		// Capture before state
+		if beforeLight := a.sceneManager.FindLight(op.ID); beforeLight != nil {
+			op.Before = beforeLight
+		}
+
+		err = a.sceneManager.UpdateLight(op.ID, op.Updates)
+
+		// Capture after state if successful
+		if err == nil {
+			if afterLight := a.sceneManager.FindLight(op.ID); afterLight != nil {
+				op.After = afterLight
+			}
+		}
+	case *RemoveLightOperation:
+		// Capture light before removal
+		if beforeLight := a.sceneManager.FindLight(op.ID); beforeLight != nil {
+			op.RemovedLight = beforeLight
+		}
+
+		err = a.sceneManager.RemoveLight(op.ID)
 	}
 
 	// Calculate duration
