@@ -100,6 +100,7 @@ func NewSceneManager() *SceneManager {
 	return &SceneManager{
 		state: &SceneState{
 			Shapes: []ShapeRequest{},
+			Lights: []LightRequest{},
 			Camera: CameraInfo{
 				Position: [3]float64{0, 0, 5},
 				LookAt:   [3]float64{0, 0, 0},
@@ -443,6 +444,157 @@ func (sm *SceneManager) RemoveShape(id string) error {
 	return fmt.Errorf("shape with ID '%s' not found", id)
 }
 
+// SetEnvironmentLighting sets the background/environment lighting for the scene
+func (sm *SceneManager) SetEnvironmentLighting(lightingType string, topColor, bottomColor, emission []float64) error {
+	// Validate lighting type
+	switch lightingType {
+	case "gradient":
+		if len(topColor) != 3 || len(bottomColor) != 3 {
+			return fmt.Errorf("gradient lighting requires both top_color and bottom_color as [r,g,b] arrays")
+		}
+		// Validate color values
+		for i, c := range topColor {
+			if c < 0 {
+				return fmt.Errorf("top_color[%d] must be >= 0", i)
+			}
+		}
+		for i, c := range bottomColor {
+			if c < 0 {
+				return fmt.Errorf("bottom_color[%d] must be >= 0", i)
+			}
+		}
+
+		// Remove any existing environment lights and add gradient
+		sm.removeEnvironmentLights()
+
+		// Convert to interface{} arrays for storage
+		topColorInterface := make([]interface{}, len(topColor))
+		for i, v := range topColor {
+			topColorInterface[i] = v
+		}
+		bottomColorInterface := make([]interface{}, len(bottomColor))
+		for i, v := range bottomColor {
+			bottomColorInterface[i] = v
+		}
+
+		sm.state.Lights = append(sm.state.Lights, LightRequest{
+			ID:   "environment_gradient",
+			Type: "infinite_gradient_light",
+			Properties: map[string]interface{}{
+				"top_color":    topColorInterface,
+				"bottom_color": bottomColorInterface,
+			},
+		})
+
+	case "uniform":
+		if len(emission) != 3 {
+			return fmt.Errorf("uniform lighting requires emission as [r,g,b] array")
+		}
+		// Validate emission values
+		for i, e := range emission {
+			if e < 0 {
+				return fmt.Errorf("emission[%d] must be >= 0", i)
+			}
+		}
+
+		// Remove any existing environment lights and add uniform
+		sm.removeEnvironmentLights()
+
+		// Convert to interface{} array for storage
+		emissionInterface := make([]interface{}, len(emission))
+		for i, v := range emission {
+			emissionInterface[i] = v
+		}
+
+		sm.state.Lights = append(sm.state.Lights, LightRequest{
+			ID:   "environment_uniform",
+			Type: "infinite_uniform_light",
+			Properties: map[string]interface{}{
+				"emission": emissionInterface,
+			},
+		})
+
+	case "none":
+		// Remove all environment lights
+		sm.removeEnvironmentLights()
+
+	default:
+		return fmt.Errorf("unsupported environment lighting type: %s", lightingType)
+	}
+
+	return nil
+}
+
+// removeEnvironmentLights removes all infinite lights from the scene
+func (sm *SceneManager) removeEnvironmentLights() {
+	filtered := make([]LightRequest, 0, len(sm.state.Lights))
+	for _, light := range sm.state.Lights {
+		if light.Type != "infinite_gradient_light" && light.Type != "infinite_uniform_light" {
+			filtered = append(filtered, light)
+		}
+	}
+	sm.state.Lights = filtered
+}
+
+// addLightsToScene adds all lights from the scene state to the raytracer scene
+func (sm *SceneManager) addLightsToScene(raytracerScene *scene.Scene) error {
+	// If no lights are defined, add default gradient lighting
+	if len(sm.state.Lights) == 0 {
+		raytracerScene.AddGradientInfiniteLight(
+			core.NewVec3(0.5, 0.7, 1.0), // topColor (blue sky)
+			core.NewVec3(1.0, 1.0, 1.0), // bottomColor (white horizon)
+		)
+		return nil
+	}
+
+	// Add lights from scene state
+	for _, lightReq := range sm.state.Lights {
+		err := sm.addLightToScene(raytracerScene, lightReq)
+		if err != nil {
+			return fmt.Errorf("failed to add light '%s': %w", lightReq.ID, err)
+		}
+	}
+
+	return nil
+}
+
+// addLightToScene adds a single light to the raytracer scene
+func (sm *SceneManager) addLightToScene(raytracerScene *scene.Scene, lightReq LightRequest) error {
+	switch lightReq.Type {
+	case "infinite_gradient_light":
+		// Extract top and bottom colors
+		topColor, ok := extractFloatArray(lightReq.Properties, "top_color", 3)
+		if !ok {
+			return fmt.Errorf("gradient light requires top_color property")
+		}
+		bottomColor, ok := extractFloatArray(lightReq.Properties, "bottom_color", 3)
+		if !ok {
+			return fmt.Errorf("gradient light requires bottom_color property")
+		}
+
+		raytracerScene.AddGradientInfiniteLight(
+			core.NewVec3(topColor[0], topColor[1], topColor[2]),
+			core.NewVec3(bottomColor[0], bottomColor[1], bottomColor[2]),
+		)
+
+	case "infinite_uniform_light":
+		// Extract emission color
+		emission, ok := extractFloatArray(lightReq.Properties, "emission", 3)
+		if !ok {
+			return fmt.Errorf("uniform light requires emission property")
+		}
+
+		raytracerScene.AddUniformInfiniteLight(
+			core.NewVec3(emission[0], emission[1], emission[2]),
+		)
+
+	default:
+		return fmt.Errorf("unsupported light type: %s", lightReq.Type)
+	}
+
+	return nil
+}
+
 // ToRaytracerScene converts the scene state to a raytracer scene
 func (sm *SceneManager) ToRaytracerScene() (*scene.Scene, error) {
 	// Scene configuration
@@ -611,11 +763,11 @@ func (sm *SceneManager) ToRaytracerScene() (*scene.Scene, error) {
 		CameraConfig:   cameraConfig,
 	}
 
-	// Add default sky gradient lighting (blue to white)
-	sceneWithShapes.AddGradientInfiniteLight(
-		core.NewVec3(0.5, 0.7, 1.0), // topColor (blue sky)
-		core.NewVec3(1.0, 1.0, 1.0), // bottomColor (white horizon)
-	)
+	// Add lights from scene state
+	err := sm.addLightsToScene(sceneWithShapes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to add lights to scene: %w", err)
+	}
 
 	return sceneWithShapes, nil
 }

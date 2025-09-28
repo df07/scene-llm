@@ -45,6 +45,7 @@ go test ./...
 - **Always run tests before committing**: Use `go test ./...` to ensure all tests pass
 - **Add tests for new features**: When adding new shape types or helper functions, include comprehensive test cases covering edge cases and error conditions
 - **Test both success and failure paths**: Validate that invalid inputs are properly handled and return appropriate errors
+- **Avoid external LLM calls in tests**: Tests can call agent code but should never make actual LLM API calls (this adds cost and makes tests non-deterministic). Use mock function calls or direct method testing instead.
 
 ## Technical Approach
 

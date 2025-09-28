@@ -141,3 +141,14 @@ type RemoveShapeOperation struct {
 
 func (op RemoveShapeOperation) ToolName() string { return "remove_shape" }
 func (op RemoveShapeOperation) Target() string   { return op.ID }
+
+type SetEnvironmentLightingOperation struct {
+	LightingType string    `json:"lighting_type"`
+	TopColor     []float64 `json:"top_color,omitempty"`
+	BottomColor  []float64 `json:"bottom_color,omitempty"`
+	Emission     []float64 `json:"emission,omitempty"`
+	ToolType     string    `json:"tool_name"` // For JSON serialization
+}
+
+func (op SetEnvironmentLightingOperation) ToolName() string { return "set_environment_lighting" }
+func (op SetEnvironmentLightingOperation) Target() string   { return "" }

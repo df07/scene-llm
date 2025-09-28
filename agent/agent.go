@@ -145,6 +145,8 @@ func (a *Agent) executeToolOperation(operation ToolOperation) {
 		}
 
 		err = a.sceneManager.RemoveShape(op.ID)
+	case *SetEnvironmentLightingOperation:
+		err = a.sceneManager.SetEnvironmentLighting(op.LightingType, op.TopColor, op.BottomColor, op.Emission)
 	}
 
 	// Calculate duration

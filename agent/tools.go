@@ -29,9 +29,17 @@ type ShapeRequest struct {
 	Properties map[string]interface{} `json:"properties"`
 }
 
+// LightRequest represents a light creation/update request from the LLM
+type LightRequest struct {
+	ID         string                 `json:"id"`
+	Type       string                 `json:"type"`
+	Properties map[string]interface{} `json:"properties"`
+}
+
 // SceneState represents the current 3D scene state
 type SceneState struct {
 	Shapes []ShapeRequest `json:"shapes"`
+	Lights []LightRequest `json:"lights"`
 	Camera CameraInfo     `json:"camera"`
 }
 
@@ -108,12 +116,53 @@ func removeShapeToolDeclaration() *genai.FunctionDeclaration {
 	}
 }
 
+// setEnvironmentLightingToolDeclaration returns the function declaration for environment lighting
+func setEnvironmentLightingToolDeclaration() *genai.FunctionDeclaration {
+	return &genai.FunctionDeclaration{
+		Name:        "set_environment_lighting",
+		Description: "Set the background/environment lighting for the scene. This replaces any existing environment lighting.",
+		Parameters: &genai.Schema{
+			Type: genai.TypeObject,
+			Properties: map[string]*genai.Schema{
+				"type": {
+					Type:        genai.TypeString,
+					Enum:        []string{"gradient", "uniform", "none"},
+					Description: "Type of environment lighting",
+				},
+				"top_color": {
+					Type:        genai.TypeArray,
+					Description: "RGB color for gradient top/zenith [r,g,b] (0.0-10.0+). Required for gradient type.",
+					Items: &genai.Schema{
+						Type: genai.TypeNumber,
+					},
+				},
+				"bottom_color": {
+					Type:        genai.TypeArray,
+					Description: "RGB color for gradient bottom/horizon [r,g,b] (0.0-10.0+). Required for gradient type.",
+					Items: &genai.Schema{
+						Type: genai.TypeNumber,
+					},
+				},
+				"emission": {
+					Type:        genai.TypeArray,
+					Description: "RGB emission color [r,g,b] (0.0-10.0+). Required for uniform type.",
+					Items: &genai.Schema{
+						Type: genai.TypeNumber,
+					},
+				},
+			},
+			Required: []string{"type"},
+		},
+	}
+}
+
 // getAllToolDeclarations returns all available tool declarations
 func getAllToolDeclarations() []*genai.FunctionDeclaration {
 	return []*genai.FunctionDeclaration{
 		createShapeToolDeclaration(),
 		updateShapeToolDeclaration(),
 		removeShapeToolDeclaration(),
+		setEnvironmentLightingToolDeclaration(),
 	}
 }
 
@@ -197,6 +246,8 @@ func parseToolOperationFromFunctionCall(call *genai.FunctionCall) ToolOperation 
 		return parseUpdateShapeOperation(call)
 	case "remove_shape":
 		return parseRemoveShapeOperation(call)
+	case "set_environment_lighting":
+		return parseSetEnvironmentLightingOperation(call)
 	default:
 		return nil
 	}
@@ -270,6 +321,56 @@ func parseRemoveShapeOperation(call *genai.FunctionCall) *RemoveShapeOperation {
 	// Extract ID
 	if id, ok := extractStringArg(args, "id"); ok {
 		operation.ID = id
+	}
+
+	return operation
+}
+
+// parseSetEnvironmentLightingOperation creates a SetEnvironmentLightingOperation from a set_environment_lighting function call
+func parseSetEnvironmentLightingOperation(call *genai.FunctionCall) *SetEnvironmentLightingOperation {
+	if call.Name != "set_environment_lighting" {
+		return nil
+	}
+
+	args := call.Args
+	operation := &SetEnvironmentLightingOperation{
+		ToolType: "set_environment_lighting",
+	}
+
+	// Extract lighting type
+	if lightingType, ok := extractStringArg(args, "type"); ok {
+		operation.LightingType = lightingType
+	}
+
+	// Extract optional color arrays
+	if topColorInterface, ok := args["top_color"].([]interface{}); ok {
+		var topColor []float64
+		for _, val := range topColorInterface {
+			if f, ok := val.(float64); ok {
+				topColor = append(topColor, f)
+			}
+		}
+		operation.TopColor = topColor
+	}
+
+	if bottomColorInterface, ok := args["bottom_color"].([]interface{}); ok {
+		var bottomColor []float64
+		for _, val := range bottomColorInterface {
+			if f, ok := val.(float64); ok {
+				bottomColor = append(bottomColor, f)
+			}
+		}
+		operation.BottomColor = bottomColor
+	}
+
+	if emissionInterface, ok := args["emission"].([]interface{}); ok {
+		var emission []float64
+		for _, val := range emissionInterface {
+			if f, ok := val.(float64); ok {
+				emission = append(emission, f)
+			}
+		}
+		operation.Emission = emission
 	}
 
 	return operation
