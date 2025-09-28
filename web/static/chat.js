@@ -339,6 +339,8 @@ class SceneLLMChat {
                 }
             case 'remove_shape':
                 return `Removed shape: ${op.id}`;
+            case 'set_environment_lighting':
+                return `Set environment lighting: ${op.lighting_type}`;
             default:
                 return `${this.getToolDisplayName(op.tool_name)} (${op.id})`;
         }
@@ -348,7 +350,8 @@ class SceneLLMChat {
         const displayNames = {
             'create_shape': 'Create Shape',
             'update_shape': 'Update Shape',
-            'remove_shape': 'Remove Shape'
+            'remove_shape': 'Remove Shape',
+            'set_environment_lighting': 'Set Environment Lighting'
         };
         return displayNames[toolName] || toolName;
     }
@@ -379,6 +382,9 @@ class SceneLLMChat {
                 break;
             case 'remove_shape':
                 details += this.getRemoveShapeDetails(op);
+                break;
+            case 'set_environment_lighting':
+                details += this.getSetEnvironmentLightingDetails(op);
                 break;
         }
 
@@ -440,6 +446,33 @@ class SceneLLMChat {
             `;
         }
         return '';
+    }
+
+    getSetEnvironmentLightingDetails(op) {
+        let details = `
+            <div class="tool-call-lighting-details">
+                <strong>Environment Lighting:</strong>
+                <div class="lighting-properties">
+                    <div>Type: ${op.lighting_type}</div>
+        `;
+
+        if (op.lighting_type === 'gradient') {
+            details += `
+                    <div>Top Color: [${op.top_color?.join(', ') || 'Not set'}]</div>
+                    <div>Bottom Color: [${op.bottom_color?.join(', ') || 'Not set'}]</div>
+            `;
+        } else if (op.lighting_type === 'uniform') {
+            details += `
+                    <div>Emission: [${op.emission?.join(', ') || 'Not set'}]</div>
+            `;
+        }
+
+        details += `
+                </div>
+            </div>
+        `;
+
+        return details;
     }
 
     displaySceneImage(imageBase64) {
