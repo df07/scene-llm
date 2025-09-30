@@ -327,33 +327,23 @@ class SceneLLMChat {
             return `${this.getToolDisplayName(op.tool_name)} failed: ${toolCallEvent.error}`;
         }
 
-        switch (op.tool_name) {
-            case 'create_shape':
-                return `Created shape: ${op.shape.id}`;
-            case 'update_shape':
-                // Check if ID was changed
-                if (op.before && op.after && op.before.id !== op.after.id) {
-                    return `Updated shape: ${op.before.id} → ${op.after.id}`;
-                } else {
-                    return `Updated shape: ${op.id}`;
-                }
-            case 'remove_shape':
-                return `Removed shape: ${op.id}`;
-            case 'set_environment_lighting':
-                return `Set environment lighting: ${op.lighting_type}`;
-            default:
-                return `${this.getToolDisplayName(op.tool_name)} (${op.id})`;
+        // Completely generic approach
+        const target = this.getOperationTarget(op);
+        const displayName = this.getToolDisplayName(op.tool_name);
+
+        if (target) {
+            return `${displayName}: ${target}`;
+        } else {
+            return displayName;
         }
     }
 
     getToolDisplayName(toolName) {
-        const displayNames = {
-            'create_shape': 'Create Shape',
-            'update_shape': 'Update Shape',
-            'remove_shape': 'Remove Shape',
-            'set_environment_lighting': 'Set Environment Lighting'
-        };
-        return displayNames[toolName] || toolName;
+        // Auto-generate a nice display name from any tool name
+        return toolName
+            .split('_')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
     }
 
     getToolCallDetails(toolCallEvent) {
@@ -372,107 +362,77 @@ class SceneLLMChat {
             details += `<div class="tool-call-error"><strong>Error:</strong> ${toolCallEvent.error}</div>`;
         }
 
-        // Add operation-specific details
-        switch (op.tool_name) {
-            case 'create_shape':
-                details += this.getCreateShapeDetails(op);
-                break;
-            case 'update_shape':
-                details += this.getUpdateShapeDetails(op);
-                break;
-            case 'remove_shape':
-                details += this.getRemoveShapeDetails(op);
-                break;
-            case 'set_environment_lighting':
-                details += this.getSetEnvironmentLightingDetails(op);
-                break;
-        }
+        // Generic details that work for any tool operation
+        details += this.getGenericToolDetails(op);
 
         return details;
     }
 
     getOperationTarget(op) {
-        switch (op.tool_name) {
-            case 'create_shape':
-                return op.shape ? op.shape.id : '';
-            case 'update_shape':
-            case 'remove_shape':
-                return op.id;
-            default:
-                return '';
+        // Try common patterns to extract a target identifier
+
+        // Direct ID field (update/remove operations)
+        if (op.id) {
+            return op.id;
         }
+
+        // Shape creation
+        if (op.shape && op.shape.id) {
+            return op.shape.id;
+        }
+
+        // Light creation
+        if (op.light && op.light.id) {
+            return op.light.id;
+        }
+
+        // Lighting type for environment lighting
+        if (op.lighting_type) {
+            return op.lighting_type;
+        }
+
+        // Fallback: look for any property ending with "_id" or just "id"
+        for (const [key, value] of Object.entries(op)) {
+            if ((key.endsWith('_id') || key === 'id') && typeof value === 'string') {
+                return value;
+            }
+        }
+
+        return '';
     }
 
-    getCreateShapeDetails(op) {
-        const shape = op.shape;
-        return `
-            <div class="tool-call-shape-details">
-                <strong>Created Shape:</strong>
-                <div class="shape-properties">
-                    <div>Type: ${shape.type}</div>
-                    <div>Properties: <pre>${JSON.stringify(shape.properties, null, 2)}</pre></div>
-                </div>
-            </div>
-        `;
-    }
 
-    getUpdateShapeDetails(op) {
-        let details = `
-            <div class="tool-call-shape-details">
-                <strong>Updates:</strong> <pre>${JSON.stringify(op.updates, null, 2)}</pre>
-        `;
+    getGenericToolDetails(op) {
+        // Generic details that work for any tool operation
+        let details = '<div class="tool-call-generic-details">';
 
-        if (op.before && op.after) {
-            details += `
-                <strong>Before:</strong> <pre>${JSON.stringify(op.before, null, 2)}</pre>
-                <strong>After:</strong> <pre>${JSON.stringify(op.after, null, 2)}</pre>
-            `;
+        // Show all operation properties except tool_name (already shown above)
+        const properties = { ...op };
+        delete properties.tool_name;
+
+        if (Object.keys(properties).length > 0) {
+            details += `<strong>Operation Data:</strong> <pre>${this.formatCompactJSON(properties)}</pre>`;
         }
 
         details += '</div>';
         return details;
     }
 
-    getRemoveShapeDetails(op) {
-        if (op.removed_shape) {
-            return `
-                <div class="tool-call-shape-details">
-                    <strong>Removed Shape:</strong>
-                    <div class="shape-properties">
-                        <div>Type: ${op.removed_shape.type}</div>
-                        <div>Properties: <pre>${JSON.stringify(op.removed_shape.properties, null, 2)}</pre></div>
-                    </div>
-                </div>
-            `;
-        }
-        return '';
-    }
-
-    getSetEnvironmentLightingDetails(op) {
-        let details = `
-            <div class="tool-call-lighting-details">
-                <strong>Environment Lighting:</strong>
-                <div class="lighting-properties">
-                    <div>Type: ${op.lighting_type}</div>
-        `;
-
-        if (op.lighting_type === 'gradient') {
-            details += `
-                    <div>Top Color: [${op.top_color?.join(', ') || 'Not set'}]</div>
-                    <div>Bottom Color: [${op.bottom_color?.join(', ') || 'Not set'}]</div>
-            `;
-        } else if (op.lighting_type === 'uniform') {
-            details += `
-                    <div>Emission: [${op.emission?.join(', ') || 'Not set'}]</div>
-            `;
-        }
-
-        details += `
-                </div>
-            </div>
-        `;
-
-        return details;
+    formatCompactJSON(obj) {
+        // Custom JSON formatter that keeps simple arrays and small objects on one line
+        return JSON.stringify(obj, null, 2).replace(
+            /\[\s*(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)\s*\]/g,
+            '[$1, $2, $3]'
+        ).replace(
+            /\[\s*(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)\s*\]/g,
+            '[$1, $2]'
+        ).replace(
+            /\[\s*(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)\s*\]/g,
+            '[$1, $2, $3, $4]'
+        ).replace(
+            /\[\s*"([^"]+)",\s*"([^"]+)",\s*"([^"]+)"\s*\]/g,
+            '["$1", "$2", "$3"]'
+        );
     }
 
     displaySceneImage(imageBase64) {
