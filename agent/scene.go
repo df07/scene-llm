@@ -99,6 +99,59 @@ func extractMaterial(properties map[string]interface{}) (map[string]interface{},
 	return nil, false
 }
 
+// validateMaterialFloatArray validates a material float array property with required check
+func validateMaterialFloatArray(mat map[string]interface{}, propName, matType, shapeID string, length int, min, max *float64) error {
+	if !hasProperty(mat, propName) {
+		return fmt.Errorf("shape '%s' %s material requires '%s' property", shapeID, matType, propName)
+	}
+
+	// Validate the array directly to give proper material-specific error messages
+	arr, ok := mat[propName].([]interface{})
+	if !ok || len(arr) != length {
+		elemDesc := "values"
+		if length == 3 {
+			elemDesc = "[r,g,b] array"
+		}
+		return fmt.Errorf("shape '%s' %s material '%s' must be %s", shapeID, matType, propName, elemDesc)
+	}
+
+	// Validate array values
+	for i, v := range arr {
+		f, ok := v.(float64)
+		if !ok {
+			return fmt.Errorf("shape '%s' %s material %s[%d] must be a number", shapeID, matType, propName, i)
+		}
+		if min != nil && f < *min {
+			return fmt.Errorf("shape '%s' %s material %s[%d] must be in range [%.1f,%.1f]", shapeID, matType, propName, i, *min, *max)
+		}
+		if max != nil && f > *max {
+			return fmt.Errorf("shape '%s' %s material %s[%d] must be in range [%.1f,%.1f]", shapeID, matType, propName, i, *min, *max)
+		}
+	}
+	return nil
+}
+
+// validateMaterialFloatProperty validates a required material float property with optional range
+func validateMaterialFloatProperty(mat map[string]interface{}, propName, matType, shapeID string, min, max *float64) error {
+	if !hasProperty(mat, propName) {
+		return fmt.Errorf("shape '%s' %s material requires '%s' property", shapeID, matType, propName)
+	}
+	val, ok := mat[propName].(float64)
+	if !ok {
+		return fmt.Errorf("shape '%s' %s material '%s' must be a number", shapeID, matType, propName)
+	}
+	if min != nil && max != nil && (val < *min || val > *max) {
+		return fmt.Errorf("shape '%s' %s material '%s' must be in range [%.1f,%.1f]", shapeID, matType, propName, *min, *max)
+	}
+	if min != nil && val < *min {
+		return fmt.Errorf("shape '%s' %s material '%s' must be >= %.1f", shapeID, matType, propName, *min)
+	}
+	if max != nil && val > *max {
+		return fmt.Errorf("shape '%s' %s material '%s' must be <= %.1f", shapeID, matType, propName, *max)
+	}
+	return nil
+}
+
 // validateMaterial validates material properties
 func validateMaterial(mat map[string]interface{}, shapeID string) error {
 	// Material type is required
@@ -107,70 +160,32 @@ func validateMaterial(mat map[string]interface{}, shapeID string) error {
 		return fmt.Errorf("shape '%s' material must have a 'type' field", shapeID)
 	}
 
+	// Helper variables for range validation
+	zero := 0.0
+	one := 1.0
+	minRefractiveIndex := 1.0
+
 	switch matType {
 	case "lambertian":
-		// Validate albedo (required)
-		if !hasProperty(mat, "albedo") {
-			return fmt.Errorf("shape '%s' lambertian material requires 'albedo' property", shapeID)
-		}
-		albedo, ok := mat["albedo"].([]interface{})
-		if !ok || len(albedo) != 3 {
-			return fmt.Errorf("shape '%s' lambertian material 'albedo' must be [r,g,b] array", shapeID)
-		}
-		// Validate albedo values are in [0,1]
-		for i, v := range albedo {
-			f, ok := v.(float64)
-			if !ok {
-				return fmt.Errorf("shape '%s' lambertian material albedo[%d] must be a number", shapeID, i)
-			}
-			if f < 0 || f > 1 {
-				return fmt.Errorf("shape '%s' lambertian material albedo[%d] must be in range [0,1]", shapeID, i)
-			}
+		// Validate albedo (required [r,g,b] array in [0,1])
+		if err := validateMaterialFloatArray(mat, "albedo", matType, shapeID, 3, &zero, &one); err != nil {
+			return err
 		}
 
 	case "metal":
-		// Validate albedo (required)
-		if !hasProperty(mat, "albedo") {
-			return fmt.Errorf("shape '%s' metal material requires 'albedo' property", shapeID)
+		// Validate albedo (required [r,g,b] array in [0,1])
+		if err := validateMaterialFloatArray(mat, "albedo", matType, shapeID, 3, &zero, &one); err != nil {
+			return err
 		}
-		albedo, ok := mat["albedo"].([]interface{})
-		if !ok || len(albedo) != 3 {
-			return fmt.Errorf("shape '%s' metal material 'albedo' must be [r,g,b] array", shapeID)
-		}
-		// Validate albedo values are in [0,1]
-		for i, v := range albedo {
-			f, ok := v.(float64)
-			if !ok {
-				return fmt.Errorf("shape '%s' metal material albedo[%d] must be a number", shapeID, i)
-			}
-			if f < 0 || f > 1 {
-				return fmt.Errorf("shape '%s' metal material albedo[%d] must be in range [0,1]", shapeID, i)
-			}
-		}
-
-		// Validate fuzz (required)
-		if !hasProperty(mat, "fuzz") {
-			return fmt.Errorf("shape '%s' metal material requires 'fuzz' property", shapeID)
-		}
-		fuzz, ok := mat["fuzz"].(float64)
-		if !ok {
-			return fmt.Errorf("shape '%s' metal material 'fuzz' must be a number", shapeID)
-		}
-		if fuzz < 0 || fuzz > 1 {
-			return fmt.Errorf("shape '%s' metal material 'fuzz' must be in range [0,1]", shapeID)
+		// Validate fuzz (required float in [0,1])
+		if err := validateMaterialFloatProperty(mat, "fuzz", matType, shapeID, &zero, &one); err != nil {
+			return err
 		}
 
 	case "dielectric":
-		// Validate refractive_index (required)
-		if !hasProperty(mat, "refractive_index") {
-			return fmt.Errorf("shape '%s' dielectric material requires 'refractive_index' property", shapeID)
-		}
-		refractiveIndex, ok := mat["refractive_index"].(float64)
-		if !ok {
-			return fmt.Errorf("shape '%s' dielectric material 'refractive_index' must be a number", shapeID)
-		}
-		if refractiveIndex < 1.0 {
-			return fmt.Errorf("shape '%s' dielectric material 'refractive_index' must be >= 1.0", shapeID)
+		// Validate refractive_index (required float >= 1.0)
+		if err := validateMaterialFloatProperty(mat, "refractive_index", matType, shapeID, &minRefractiveIndex, nil); err != nil {
+			return err
 		}
 
 	default:
