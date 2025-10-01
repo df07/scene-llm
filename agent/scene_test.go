@@ -1365,7 +1365,7 @@ func TestMaterialValidation(t *testing.T) {
 					"center": []interface{}{0.0, 0.0, 0.0},
 					"radius": 1.0,
 					"material": map[string]interface{}{
-						"type":   "dielectric",
+						"type":   "emissive",
 						"albedo": []interface{}{0.5, 0.5, 0.5},
 					},
 				},
@@ -1517,5 +1517,163 @@ func TestUpdateShapeMaterial(t *testing.T) {
 	}
 	if fuzz != 0.2 {
 		t.Errorf("Expected fuzz 0.2, got %f", fuzz)
+	}
+}
+
+func TestShapeWithDielectricMaterial(t *testing.T) {
+	sm := NewSceneManager()
+
+	shape := ShapeRequest{
+		ID:   "glass_sphere",
+		Type: "sphere",
+		Properties: map[string]interface{}{
+			"center": []interface{}{0.0, 1.0, 0.0},
+			"radius": 1.0,
+			"material": map[string]interface{}{
+				"type":             "dielectric",
+				"refractive_index": 1.5,
+			},
+		},
+	}
+
+	err := sm.AddShapes([]ShapeRequest{shape})
+	if err != nil {
+		t.Fatalf("AddShapes() with dielectric material failed: %v", err)
+	}
+
+	state := sm.GetState()
+	if len(state.Shapes) != 1 {
+		t.Fatalf("Expected 1 shape, got %d", len(state.Shapes))
+	}
+
+	// Verify material is preserved
+	mat, ok := extractMaterial(state.Shapes[0].Properties)
+	if !ok {
+		t.Fatal("Material not found in shape properties")
+	}
+
+	matType, _ := mat["type"].(string)
+	if matType != "dielectric" {
+		t.Errorf("Expected material type 'dielectric', got '%s'", matType)
+	}
+
+	refractiveIndex, ok := extractFloat(mat, "refractive_index")
+	if !ok {
+		t.Fatal("Refractive index not found or invalid")
+	}
+	if refractiveIndex != 1.5 {
+		t.Errorf("Expected refractive_index 1.5, got %f", refractiveIndex)
+	}
+}
+
+func TestDielectricMaterialValidation(t *testing.T) {
+	sm := NewSceneManager()
+
+	tests := []struct {
+		name        string
+		shape       ShapeRequest
+		expectError bool
+		errorMatch  string
+	}{
+		{
+			name: "valid dielectric glass",
+			shape: ShapeRequest{
+				ID:   "test",
+				Type: "sphere",
+				Properties: map[string]interface{}{
+					"center": []interface{}{0.0, 0.0, 0.0},
+					"radius": 1.0,
+					"material": map[string]interface{}{
+						"type":             "dielectric",
+						"refractive_index": 1.5,
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "valid dielectric water",
+			shape: ShapeRequest{
+				ID:   "test",
+				Type: "sphere",
+				Properties: map[string]interface{}{
+					"center": []interface{}{0.0, 0.0, 0.0},
+					"radius": 1.0,
+					"material": map[string]interface{}{
+						"type":             "dielectric",
+						"refractive_index": 1.33,
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "valid dielectric diamond",
+			shape: ShapeRequest{
+				ID:   "test",
+				Type: "sphere",
+				Properties: map[string]interface{}{
+					"center": []interface{}{0.0, 0.0, 0.0},
+					"radius": 1.0,
+					"material": map[string]interface{}{
+						"type":             "dielectric",
+						"refractive_index": 2.4,
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "dielectric missing refractive_index",
+			shape: ShapeRequest{
+				ID:   "test",
+				Type: "sphere",
+				Properties: map[string]interface{}{
+					"center": []interface{}{0.0, 0.0, 0.0},
+					"radius": 1.0,
+					"material": map[string]interface{}{
+						"type": "dielectric",
+					},
+				},
+			},
+			expectError: true,
+			errorMatch:  "requires 'refractive_index' property",
+		},
+		{
+			name: "dielectric refractive_index too low",
+			shape: ShapeRequest{
+				ID:   "test",
+				Type: "sphere",
+				Properties: map[string]interface{}{
+					"center": []interface{}{0.0, 0.0, 0.0},
+					"radius": 1.0,
+					"material": map[string]interface{}{
+						"type":             "dielectric",
+						"refractive_index": 0.5,
+					},
+				},
+			},
+			expectError: true,
+			errorMatch:  "must be >= 1.0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := sm.AddShapes([]ShapeRequest{tt.shape})
+			if tt.expectError {
+				if err == nil {
+					t.Error("Expected error but got none")
+				} else if !strings.Contains(err.Error(), tt.errorMatch) {
+					t.Errorf("Expected error containing '%s', got: %v", tt.errorMatch, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Expected no error, got: %v", err)
+				}
+			}
+			// Clear shapes for next test
+			sm.state.Shapes = []ShapeRequest{}
+		})
 	}
 }

@@ -68,7 +68,7 @@ func createShapeToolDeclaration() *genai.FunctionDeclaration {
 				},
 				"properties": {
 					Type:        genai.TypeObject,
-					Description: "Shape-specific properties including optional material. For sphere: {center: [x,y,z], radius: number, material?: {type: 'lambertian'|'metal', albedo: [r,g,b], fuzz?: number}}. For box: {center: [x,y,z], dimensions: [w,h,d], rotation?: [x,y,z], material?: {...}}. For quad: {corner: [x,y,z], u: [x,y,z], v: [x,y,z], material?: {...}}. For disc: {center: [x,y,z], normal: [x,y,z], radius: number, material?: {...}}. Material defaults to gray lambertian if not specified. Lambertian: {type: 'lambertian', albedo: [r,g,b]}. Metal: {type: 'metal', albedo: [r,g,b], fuzz: 0.0-1.0 (0=mirror, 1=fuzzy)}",
+					Description: "Shape-specific properties including optional material. For sphere: {center: [x,y,z], radius: number, material?: {...}}. For box: {center: [x,y,z], dimensions: [w,h,d], rotation?: [x,y,z], material?: {...}}. For quad: {corner: [x,y,z], u: [x,y,z], v: [x,y,z], material?: {...}}. For disc: {center: [x,y,z], normal: [x,y,z], radius: number, material?: {...}}. Material defaults to gray lambertian if not specified. Materials: Lambertian {type: 'lambertian', albedo: [r,g,b]}, Metal {type: 'metal', albedo: [r,g,b], fuzz: 0.0-1.0}, Dielectric {type: 'dielectric', refractive_index: number (1.0=air, 1.33=water, 1.5=glass, 2.4=diamond)}",
 				},
 			},
 			Required: []string{"id", "type", "properties"},
@@ -90,7 +90,7 @@ func updateShapeToolDeclaration() *genai.FunctionDeclaration {
 				},
 				"updates": {
 					Type:        genai.TypeObject,
-					Description: "Object containing fields to update. Examples: {\"id\": \"new_name\"} to rename, {\"properties\": {\"position\": [1, 2, 3]}} to move shape, {\"properties\": {\"material\": {\"type\": \"metal\", \"albedo\": [0.9, 0.9, 0.9], \"fuzz\": 0.1}}} to change material. Only specified fields will be updated.",
+					Description: "Object containing fields to update. Examples: {\"id\": \"new_name\"} to rename, {\"properties\": {\"position\": [1, 2, 3]}} to move shape, {\"properties\": {\"material\": {\"type\": \"metal\", \"albedo\": [0.9, 0.9, 0.9], \"fuzz\": 0.1}}} to make metallic, {\"properties\": {\"material\": {\"type\": \"dielectric\", \"refractive_index\": 1.5}}} to make glass. Only specified fields will be updated.",
 				},
 			},
 			Required: []string{"id", "updates"},

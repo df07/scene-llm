@@ -160,8 +160,21 @@ func validateMaterial(mat map[string]interface{}, shapeID string) error {
 			return fmt.Errorf("shape '%s' metal material 'fuzz' must be in range [0,1]", shapeID)
 		}
 
+	case "dielectric":
+		// Validate refractive_index (required)
+		if !hasProperty(mat, "refractive_index") {
+			return fmt.Errorf("shape '%s' dielectric material requires 'refractive_index' property", shapeID)
+		}
+		refractiveIndex, ok := mat["refractive_index"].(float64)
+		if !ok {
+			return fmt.Errorf("shape '%s' dielectric material 'refractive_index' must be a number", shapeID)
+		}
+		if refractiveIndex < 1.0 {
+			return fmt.Errorf("shape '%s' dielectric material 'refractive_index' must be >= 1.0", shapeID)
+		}
+
 	default:
-		return fmt.Errorf("shape '%s' has unsupported material type '%s' (supported: lambertian, metal)", shapeID, matType)
+		return fmt.Errorf("shape '%s' has unsupported material type '%s' (supported: lambertian, metal, dielectric)", shapeID, matType)
 	}
 
 	return nil
@@ -1241,6 +1254,9 @@ func (sm *SceneManager) ToRaytracerScene() (*scene.Scene, error) {
 				albedo, _ := extractFloatArray(mat, "albedo", 3)
 				fuzz, _ := extractFloat(mat, "fuzz")
 				shapeMaterial = material.NewMetal(core.NewVec3(albedo[0], albedo[1], albedo[2]), fuzz)
+			case "dielectric":
+				refractiveIndex, _ := extractFloat(mat, "refractive_index")
+				shapeMaterial = material.NewDielectric(refractiveIndex)
 			default:
 				// Unknown material type - use default gray Lambertian
 				shapeMaterial = material.NewLambertian(core.NewVec3(0.5, 0.5, 0.5))

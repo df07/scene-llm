@@ -33,9 +33,20 @@ Shapes receive materials at construction time. All shape constructors take a `ma
 
 **Use Cases**: Mirrors, polished metals, chrome, brushed steel
 
-### 3. Dielectric (Glass/Transparent) 🔮 (Future)
+### 3. Dielectric (Glass/Transparent) ✅
 
 **Constructor**: `material.NewDielectric(refractiveIndex float64)`
+
+**Properties**:
+- `refractive_index: number` - Index of refraction (≥ 1.0)
+
+**Common Values**:
+- Air: 1.0
+- Water: 1.33
+- Glass: 1.5
+- Diamond: 2.4
+
+**Use Cases**: Glass, water, ice, crystals, transparent objects
 
 ### 4. Emissive (Light Source) 💡 (Handled via lighting system)
 
@@ -163,10 +174,10 @@ update_shape({
 7. ⏳ Add default material behavior (gray Lambertian if not specified)
 8. ⏳ Add comprehensive tests
 
-### Phase 2: Advanced Materials (Future)
+### Phase 2: Advanced Materials
 
-1. Dielectric (glass/transparent) material support
-2. Texture support (if raytracer adds it)
+1. ✅ Dielectric (glass/transparent) material support
+2. ⏳ Texture support (if raytracer adds it)
 
 ## Validation Rules
 
@@ -178,6 +189,10 @@ update_shape({
 - `type` must be "metal"
 - `albedo` must be [r, g, b] array with values in [0, 1] range
 - `fuzz` must be number in [0.0, 1.0] range
+
+### Dielectric Material
+- `type` must be "dielectric"
+- `refractive_index` must be number >= 1.0
 
 ### Default Material
 - If no material is specified in shape properties, create gray Lambertian: `{type: "lambertian", albedo: [0.5, 0.5, 0.5]}`
