@@ -90,6 +90,83 @@ func getShapeType(properties map[string]interface{}) string {
 	return "shape"
 }
 
+// extractMaterial extracts material specification from shape properties
+// Returns (materialMap, exists)
+func extractMaterial(properties map[string]interface{}) (map[string]interface{}, bool) {
+	if mat, ok := properties["material"].(map[string]interface{}); ok {
+		return mat, true
+	}
+	return nil, false
+}
+
+// validateMaterial validates material properties
+func validateMaterial(mat map[string]interface{}, shapeID string) error {
+	// Material type is required
+	matType, ok := mat["type"].(string)
+	if !ok {
+		return fmt.Errorf("shape '%s' material must have a 'type' field", shapeID)
+	}
+
+	switch matType {
+	case "lambertian":
+		// Validate albedo (required)
+		if !hasProperty(mat, "albedo") {
+			return fmt.Errorf("shape '%s' lambertian material requires 'albedo' property", shapeID)
+		}
+		albedo, ok := mat["albedo"].([]interface{})
+		if !ok || len(albedo) != 3 {
+			return fmt.Errorf("shape '%s' lambertian material 'albedo' must be [r,g,b] array", shapeID)
+		}
+		// Validate albedo values are in [0,1]
+		for i, v := range albedo {
+			f, ok := v.(float64)
+			if !ok {
+				return fmt.Errorf("shape '%s' lambertian material albedo[%d] must be a number", shapeID, i)
+			}
+			if f < 0 || f > 1 {
+				return fmt.Errorf("shape '%s' lambertian material albedo[%d] must be in range [0,1]", shapeID, i)
+			}
+		}
+
+	case "metal":
+		// Validate albedo (required)
+		if !hasProperty(mat, "albedo") {
+			return fmt.Errorf("shape '%s' metal material requires 'albedo' property", shapeID)
+		}
+		albedo, ok := mat["albedo"].([]interface{})
+		if !ok || len(albedo) != 3 {
+			return fmt.Errorf("shape '%s' metal material 'albedo' must be [r,g,b] array", shapeID)
+		}
+		// Validate albedo values are in [0,1]
+		for i, v := range albedo {
+			f, ok := v.(float64)
+			if !ok {
+				return fmt.Errorf("shape '%s' metal material albedo[%d] must be a number", shapeID, i)
+			}
+			if f < 0 || f > 1 {
+				return fmt.Errorf("shape '%s' metal material albedo[%d] must be in range [0,1]", shapeID, i)
+			}
+		}
+
+		// Validate fuzz (required)
+		if !hasProperty(mat, "fuzz") {
+			return fmt.Errorf("shape '%s' metal material requires 'fuzz' property", shapeID)
+		}
+		fuzz, ok := mat["fuzz"].(float64)
+		if !ok {
+			return fmt.Errorf("shape '%s' metal material 'fuzz' must be a number", shapeID)
+		}
+		if fuzz < 0 || fuzz > 1 {
+			return fmt.Errorf("shape '%s' metal material 'fuzz' must be in range [0,1]", shapeID)
+		}
+
+	default:
+		return fmt.Errorf("shape '%s' has unsupported material type '%s' (supported: lambertian, metal)", shapeID, matType)
+	}
+
+	return nil
+}
+
 // SceneManager handles all scene state and operations
 type SceneManager struct {
 	state *SceneState
@@ -228,6 +305,13 @@ func validateShapeProperties(shape ShapeRequest) error {
 		zero := 0.0
 		one := 1.0
 		if err := validateFloatArray(shape.Properties, "color", 3, &zero, &one, shape.ID); err != nil {
+			return err
+		}
+	}
+
+	// Validate material if present (optional property)
+	if mat, ok := extractMaterial(shape.Properties); ok {
+		if err := validateMaterial(mat, shape.ID); err != nil {
 			return err
 		}
 	}
@@ -1135,13 +1219,7 @@ func (sm *SceneManager) ToRaytracerScene() (*scene.Scene, error) {
 	var sceneShapes []geometry.Shape
 	for _, shapeReq := range sm.state.Shapes {
 		// Extract common properties
-		var color [3]float64 = [3]float64{0.5, 0.5, 0.5} // Default gray
-		var size float64 = 1.0                           // Default size
-
-		// Extract color
-		if colorArray, ok := extractFloatArray(shapeReq.Properties, "color", 3); ok {
-			copy(color[:], colorArray)
-		}
+		var size float64 = 1.0 // Default size
 
 		// Extract size/radius (used for default values)
 		if radius, ok := extractFloat(shapeReq.Properties, "radius"); ok {
@@ -1150,8 +1228,27 @@ func (sm *SceneManager) ToRaytracerScene() (*scene.Scene, error) {
 			size = dimsArray[0] // Use first dimension as representative size
 		}
 
-		// Create material with requested color
-		shapeMaterial := material.NewLambertian(core.NewVec3(color[0], color[1], color[2]))
+		// Create material from shape properties
+		var shapeMaterial material.Material
+		if mat, hasMaterial := extractMaterial(shapeReq.Properties); hasMaterial {
+			// Extract material from shape properties
+			matType, _ := mat["type"].(string)
+			switch matType {
+			case "lambertian":
+				albedo, _ := extractFloatArray(mat, "albedo", 3)
+				shapeMaterial = material.NewLambertian(core.NewVec3(albedo[0], albedo[1], albedo[2]))
+			case "metal":
+				albedo, _ := extractFloatArray(mat, "albedo", 3)
+				fuzz, _ := extractFloat(mat, "fuzz")
+				shapeMaterial = material.NewMetal(core.NewVec3(albedo[0], albedo[1], albedo[2]), fuzz)
+			default:
+				// Unknown material type - use default gray Lambertian
+				shapeMaterial = material.NewLambertian(core.NewVec3(0.5, 0.5, 0.5))
+			}
+		} else {
+			// No material specified - use default gray Lambertian
+			shapeMaterial = material.NewLambertian(core.NewVec3(0.5, 0.5, 0.5))
+		}
 
 		// Create geometry based on type
 		var shape geometry.Shape

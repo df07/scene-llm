@@ -68,7 +68,7 @@ func createShapeToolDeclaration() *genai.FunctionDeclaration {
 				},
 				"properties": {
 					Type:        genai.TypeObject,
-					Description: "Shape-specific properties. For sphere: {center: [x,y,z], radius: number, color: [r,g,b]}. For box: {center: [x,y,z], dimensions: [w,h,d], color: [r,g,b], rotation: [x,y,z] (optional, degrees)}. For quad: {corner: [x,y,z], u: [x,y,z], v: [x,y,z], color: [r,g,b]} where corner is one corner and u,v are edge vectors. For disc: {center: [x,y,z], normal: [x,y,z], radius: number, color: [r,g,b]}",
+					Description: "Shape-specific properties including optional material. For sphere: {center: [x,y,z], radius: number, material?: {type: 'lambertian'|'metal', albedo: [r,g,b], fuzz?: number}}. For box: {center: [x,y,z], dimensions: [w,h,d], rotation?: [x,y,z], material?: {...}}. For quad: {corner: [x,y,z], u: [x,y,z], v: [x,y,z], material?: {...}}. For disc: {center: [x,y,z], normal: [x,y,z], radius: number, material?: {...}}. Material defaults to gray lambertian if not specified. Lambertian: {type: 'lambertian', albedo: [r,g,b]}. Metal: {type: 'metal', albedo: [r,g,b], fuzz: 0.0-1.0 (0=mirror, 1=fuzzy)}",
 				},
 			},
 			Required: []string{"id", "type", "properties"},
@@ -90,7 +90,7 @@ func updateShapeToolDeclaration() *genai.FunctionDeclaration {
 				},
 				"updates": {
 					Type:        genai.TypeObject,
-					Description: "Object containing fields to update. Examples: {\"id\": \"new_name\"} to rename, {\"properties\": {\"color\": [1.0, 0.0, 1.0]}} to change color to purple, {\"properties\": {\"position\": [1, 2, 3]}} to move shape. Only specified fields will be updated.",
+					Description: "Object containing fields to update. Examples: {\"id\": \"new_name\"} to rename, {\"properties\": {\"position\": [1, 2, 3]}} to move shape, {\"properties\": {\"material\": {\"type\": \"metal\", \"albedo\": [0.9, 0.9, 0.9], \"fuzz\": 0.1}}} to change material. Only specified fields will be updated.",
 				},
 			},
 			Required: []string{"id", "updates"},

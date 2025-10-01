@@ -1196,3 +1196,326 @@ func TestValidateShapeProperties(t *testing.T) {
 		}
 	})
 }
+
+func TestShapeWithLambertianMaterial(t *testing.T) {
+	sm := NewSceneManager()
+
+	shape := ShapeRequest{
+		ID:   "matte_sphere",
+		Type: "sphere",
+		Properties: map[string]interface{}{
+			"center": []interface{}{0.0, 1.0, 0.0},
+			"radius": 1.0,
+			"material": map[string]interface{}{
+				"type":   "lambertian",
+				"albedo": []interface{}{0.8, 0.1, 0.1},
+			},
+		},
+	}
+
+	err := sm.AddShapes([]ShapeRequest{shape})
+	if err != nil {
+		t.Fatalf("AddShapes() with lambertian material failed: %v", err)
+	}
+
+	state := sm.GetState()
+	if len(state.Shapes) != 1 {
+		t.Fatalf("Expected 1 shape, got %d", len(state.Shapes))
+	}
+
+	// Verify material is preserved
+	mat, ok := extractMaterial(state.Shapes[0].Properties)
+	if !ok {
+		t.Fatal("Material not found in shape properties")
+	}
+
+	matType, _ := mat["type"].(string)
+	if matType != "lambertian" {
+		t.Errorf("Expected material type 'lambertian', got '%s'", matType)
+	}
+
+	albedo, ok := extractFloatArray(mat, "albedo", 3)
+	if !ok {
+		t.Fatal("Albedo not found or invalid")
+	}
+	if albedo[0] != 0.8 || albedo[1] != 0.1 || albedo[2] != 0.1 {
+		t.Errorf("Expected albedo [0.8, 0.1, 0.1], got %v", albedo)
+	}
+}
+
+func TestShapeWithMetalMaterial(t *testing.T) {
+	sm := NewSceneManager()
+
+	shape := ShapeRequest{
+		ID:   "mirror_ball",
+		Type: "sphere",
+		Properties: map[string]interface{}{
+			"center": []interface{}{2.0, 1.0, 0.0},
+			"radius": 1.0,
+			"material": map[string]interface{}{
+				"type":   "metal",
+				"albedo": []interface{}{0.9, 0.9, 0.9},
+				"fuzz":   0.1,
+			},
+		},
+	}
+
+	err := sm.AddShapes([]ShapeRequest{shape})
+	if err != nil {
+		t.Fatalf("AddShapes() with metal material failed: %v", err)
+	}
+
+	state := sm.GetState()
+	if len(state.Shapes) != 1 {
+		t.Fatalf("Expected 1 shape, got %d", len(state.Shapes))
+	}
+
+	// Verify material is preserved
+	mat, ok := extractMaterial(state.Shapes[0].Properties)
+	if !ok {
+		t.Fatal("Material not found in shape properties")
+	}
+
+	matType, _ := mat["type"].(string)
+	if matType != "metal" {
+		t.Errorf("Expected material type 'metal', got '%s'", matType)
+	}
+
+	albedo, ok := extractFloatArray(mat, "albedo", 3)
+	if !ok {
+		t.Fatal("Albedo not found or invalid")
+	}
+	if albedo[0] != 0.9 || albedo[1] != 0.9 || albedo[2] != 0.9 {
+		t.Errorf("Expected albedo [0.9, 0.9, 0.9], got %v", albedo)
+	}
+
+	fuzz, ok := extractFloat(mat, "fuzz")
+	if !ok {
+		t.Fatal("Fuzz not found or invalid")
+	}
+	if fuzz != 0.1 {
+		t.Errorf("Expected fuzz 0.1, got %f", fuzz)
+	}
+}
+
+func TestMaterialValidation(t *testing.T) {
+	sm := NewSceneManager()
+
+	tests := []struct {
+		name        string
+		shape       ShapeRequest
+		expectError bool
+		errorMatch  string
+	}{
+		{
+			name: "valid lambertian",
+			shape: ShapeRequest{
+				ID:   "test",
+				Type: "sphere",
+				Properties: map[string]interface{}{
+					"center": []interface{}{0.0, 0.0, 0.0},
+					"radius": 1.0,
+					"material": map[string]interface{}{
+						"type":   "lambertian",
+						"albedo": []interface{}{0.5, 0.5, 0.5},
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "valid metal",
+			shape: ShapeRequest{
+				ID:   "test",
+				Type: "sphere",
+				Properties: map[string]interface{}{
+					"center": []interface{}{0.0, 0.0, 0.0},
+					"radius": 1.0,
+					"material": map[string]interface{}{
+						"type":   "metal",
+						"albedo": []interface{}{0.9, 0.9, 0.9},
+						"fuzz":   0.5,
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "missing material type",
+			shape: ShapeRequest{
+				ID:   "test",
+				Type: "sphere",
+				Properties: map[string]interface{}{
+					"center": []interface{}{0.0, 0.0, 0.0},
+					"radius": 1.0,
+					"material": map[string]interface{}{
+						"albedo": []interface{}{0.5, 0.5, 0.5},
+					},
+				},
+			},
+			expectError: true,
+			errorMatch:  "must have a 'type' field",
+		},
+		{
+			name: "unsupported material type",
+			shape: ShapeRequest{
+				ID:   "test",
+				Type: "sphere",
+				Properties: map[string]interface{}{
+					"center": []interface{}{0.0, 0.0, 0.0},
+					"radius": 1.0,
+					"material": map[string]interface{}{
+						"type":   "dielectric",
+						"albedo": []interface{}{0.5, 0.5, 0.5},
+					},
+				},
+			},
+			expectError: true,
+			errorMatch:  "unsupported material type",
+		},
+		{
+			name: "lambertian missing albedo",
+			shape: ShapeRequest{
+				ID:   "test",
+				Type: "sphere",
+				Properties: map[string]interface{}{
+					"center": []interface{}{0.0, 0.0, 0.0},
+					"radius": 1.0,
+					"material": map[string]interface{}{
+						"type": "lambertian",
+					},
+				},
+			},
+			expectError: true,
+			errorMatch:  "requires 'albedo' property",
+		},
+		{
+			name: "metal missing fuzz",
+			shape: ShapeRequest{
+				ID:   "test",
+				Type: "sphere",
+				Properties: map[string]interface{}{
+					"center": []interface{}{0.0, 0.0, 0.0},
+					"radius": 1.0,
+					"material": map[string]interface{}{
+						"type":   "metal",
+						"albedo": []interface{}{0.9, 0.9, 0.9},
+					},
+				},
+			},
+			expectError: true,
+			errorMatch:  "requires 'fuzz' property",
+		},
+		{
+			name: "metal fuzz out of range",
+			shape: ShapeRequest{
+				ID:   "test",
+				Type: "sphere",
+				Properties: map[string]interface{}{
+					"center": []interface{}{0.0, 0.0, 0.0},
+					"radius": 1.0,
+					"material": map[string]interface{}{
+						"type":   "metal",
+						"albedo": []interface{}{0.9, 0.9, 0.9},
+						"fuzz":   1.5,
+					},
+				},
+			},
+			expectError: true,
+			errorMatch:  "must be in range [0,1]",
+		},
+		{
+			name: "albedo out of range",
+			shape: ShapeRequest{
+				ID:   "test",
+				Type: "sphere",
+				Properties: map[string]interface{}{
+					"center": []interface{}{0.0, 0.0, 0.0},
+					"radius": 1.0,
+					"material": map[string]interface{}{
+						"type":   "lambertian",
+						"albedo": []interface{}{1.5, 0.5, 0.5},
+					},
+				},
+			},
+			expectError: true,
+			errorMatch:  "must be in range [0,1]",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := sm.AddShapes([]ShapeRequest{tt.shape})
+			if tt.expectError {
+				if err == nil {
+					t.Error("Expected error but got none")
+				} else if !strings.Contains(err.Error(), tt.errorMatch) {
+					t.Errorf("Expected error containing '%s', got: %v", tt.errorMatch, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Expected no error, got: %v", err)
+				}
+			}
+			// Clear shapes for next test
+			sm.state.Shapes = []ShapeRequest{}
+		})
+	}
+}
+
+func TestUpdateShapeMaterial(t *testing.T) {
+	sm := NewSceneManager()
+
+	// Add a shape with lambertian material
+	shape := ShapeRequest{
+		ID:   "test_sphere",
+		Type: "sphere",
+		Properties: map[string]interface{}{
+			"center": []interface{}{0.0, 1.0, 0.0},
+			"radius": 1.0,
+			"material": map[string]interface{}{
+				"type":   "lambertian",
+				"albedo": []interface{}{0.8, 0.1, 0.1},
+			},
+		},
+	}
+
+	err := sm.AddShapes([]ShapeRequest{shape})
+	if err != nil {
+		t.Fatalf("AddShapes() failed: %v", err)
+	}
+
+	// Update material to metal
+	err = sm.UpdateShape("test_sphere", map[string]interface{}{
+		"properties": map[string]interface{}{
+			"material": map[string]interface{}{
+				"type":   "metal",
+				"albedo": []interface{}{0.9, 0.9, 0.9},
+				"fuzz":   0.2,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdateShape() failed: %v", err)
+	}
+
+	// Verify material was updated
+	state := sm.GetState()
+	mat, ok := extractMaterial(state.Shapes[0].Properties)
+	if !ok {
+		t.Fatal("Material not found after update")
+	}
+
+	matType, _ := mat["type"].(string)
+	if matType != "metal" {
+		t.Errorf("Expected material type 'metal', got '%s'", matType)
+	}
+
+	fuzz, ok := extractFloat(mat, "fuzz")
+	if !ok {
+		t.Fatal("Fuzz not found after update")
+	}
+	if fuzz != 0.2 {
+		t.Errorf("Expected fuzz 0.2, got %f", fuzz)
+	}
+}
