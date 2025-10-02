@@ -13,7 +13,7 @@ import (
 
 // Agent handles LLM conversations and tool execution
 type Agent struct {
-	client       *genai.Client
+	llmClient    LLMClient
 	events       chan<- AgentEvent
 	sceneManager *SceneManager
 }
@@ -34,10 +34,19 @@ func New(events chan<- AgentEvent) (*Agent, error) {
 	}
 
 	return &Agent{
-		client:       client,
+		llmClient:    &GeminiClient{client: client},
 		events:       events,
 		sceneManager: NewSceneManager(),
 	}, nil
+}
+
+// NewWithMockLLM creates an agent with a mock LLM client for testing
+func NewWithMockLLM(events chan<- AgentEvent, mockClient LLMClient) *Agent {
+	return &Agent{
+		llmClient:    mockClient,
+		events:       events,
+		sceneManager: NewSceneManager(),
+	}
 }
 
 // SetEventsChannel sets the events channel for this agent
@@ -45,70 +54,125 @@ func (a *Agent) SetEventsChannel(events chan<- AgentEvent) {
 	a.events = events
 }
 
-// ProcessMessage handles a conversation turn and emits events
+// ProcessMessage handles a conversation with agentic loop and emits events
 func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Content) error {
+	const maxTurns = 10
+
 	// Send thinking event
 	a.events <- NewThinkingEvent("🤖 Processing your request...")
 
 	// Build scene context from our internal scene manager
 	sceneContext := a.sceneManager.BuildContext()
 
-	// Add scene context to the latest message
+	// Add scene context to the latest message (only for initial user message)
 	contextualizedConversation := a.addSceneContext(conversation, sceneContext)
 
 	// Prepare tools
 	tools := []*genai.Tool{{FunctionDeclarations: getAllToolDeclarations()}}
 
-	// Generate content with function calling and retry logic
-	result, err := a.generateContentWithRetry(ctx, "gemini-2.5-flash", contextualizedConversation, &genai.GenerateContentConfig{
-		Tools: tools,
-	})
-	if err != nil {
-		log.Printf("Failed to generate content: %v", err)
-		a.events <- NewErrorEvent(fmt.Errorf("LLM generation failed: %w", err))
-		return err
-	}
+	// Agentic loop
+	turnCount := 0
+	for {
+		// Check turn limit
+		if turnCount >= maxTurns {
+			a.events <- NewResponseEvent(fmt.Sprintf("Reached maximum turn limit (%d turns). Send a message to continue.", maxTurns))
+			a.events <- NewCompleteEvent()
+			return nil
+		}
 
-	// Process the response
-	if len(result.Candidates) == 0 || len(result.Candidates[0].Content.Parts) == 0 {
-		log.Printf("No response from LLM")
-		a.events <- NewErrorEvent(fmt.Errorf("no response from LLM"))
-		return fmt.Errorf("no response from LLM")
-	}
+		// Generate content with function calling and retry logic
+		result, err := a.generateContentWithRetry(ctx, "gemini-2.5-flash", contextualizedConversation, &genai.GenerateContentConfig{
+			Tools: tools,
+		})
+		if err != nil {
+			log.Printf("Failed to generate content: %v", err)
+			a.events <- NewErrorEvent(fmt.Errorf("LLM generation failed: %w", err))
+			return err
+		}
 
-	var textResponse string
-	var hasShapeOperations bool
+		// Process the response
+		if len(result.Candidates) == 0 || len(result.Candidates[0].Content.Parts) == 0 {
+			log.Printf("No response from LLM")
+			a.events <- NewErrorEvent(fmt.Errorf("no response from LLM"))
+			return fmt.Errorf("no response from LLM")
+		}
 
-	// Process all parts of the response
-	for _, part := range result.Candidates[0].Content.Parts {
-		// Handle function calls
-		if part.FunctionCall != nil {
-			operation := parseToolOperationFromFunctionCall(part.FunctionCall)
-			if operation != nil {
-				hasShapeOperations = true
-				a.executeToolOperation(operation)
+		var textResponse string
+		var functionCalls []*genai.FunctionCall
+		var hasShapeOperations bool
+
+		// Collect all parts from the response
+		for _, part := range result.Candidates[0].Content.Parts {
+			if part.FunctionCall != nil {
+				functionCalls = append(functionCalls, part.FunctionCall)
+			}
+			if part.Text != "" {
+				textResponse = part.Text
 			}
 		}
 
-		// Handle text response
-		if part.Text != "" {
-			textResponse = part.Text
+		// Emit text response if we have one
+		if textResponse != "" {
+			a.events <- NewResponseEvent(textResponse)
 		}
-	}
 
-	// Emit text response if we have one
-	if textResponse != "" {
-		a.events <- NewResponseEvent(textResponse)
-	}
-
-	// Emit scene render event if any operations were performed
-	if hasShapeOperations {
-		raytracerScene, err := a.sceneManager.ToRaytracerScene()
-		if err != nil {
-			a.events <- NewErrorEvent(fmt.Errorf("failed to create scene: %w", err))
-		} else {
-			a.events <- NewSceneRenderEvent(raytracerScene)
+		// If no tool calls, we're done (LLM signaled completion)
+		if len(functionCalls) == 0 {
+			break
 		}
+
+		// Execute tool calls and collect results
+		var functionResponses []*genai.Part
+		for _, fc := range functionCalls {
+			operation := parseToolOperationFromFunctionCall(fc)
+			if operation != nil {
+				hasShapeOperations = true
+				toolResult := a.executeToolOperation(operation)
+
+				// Convert ToolResult to map for FunctionResponse
+				resultMap := make(map[string]any)
+				if toolResult.Success {
+					resultMap["success"] = true
+					resultMap["result"] = toolResult.Result
+				} else {
+					resultMap["success"] = false
+					resultMap["error"] = toolResult.Error
+				}
+
+				// Create function response for conversation history
+				functionResponses = append(functionResponses, &genai.Part{
+					FunctionResponse: &genai.FunctionResponse{
+						Name:     fc.Name,
+						Response: resultMap,
+					},
+				})
+			}
+		}
+
+		// Emit scene render event if any operations were performed
+		if hasShapeOperations {
+			raytracerScene, err := a.sceneManager.ToRaytracerScene()
+			if err != nil {
+				a.events <- NewErrorEvent(fmt.Errorf("failed to create scene: %w", err))
+			} else {
+				a.events <- NewSceneRenderEvent(raytracerScene)
+			}
+			hasShapeOperations = false // Reset for next iteration
+		}
+
+		// Append assistant's response to conversation
+		contextualizedConversation = append(contextualizedConversation, result.Candidates[0].Content)
+
+		// Append function responses to conversation
+		if len(functionResponses) > 0 {
+			contextualizedConversation = append(contextualizedConversation, &genai.Content{
+				Role:  "function",
+				Parts: functionResponses,
+			})
+		}
+
+		// Increment turn counter
+		turnCount++
 	}
 
 	// Send completion event
@@ -116,14 +180,26 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Conten
 	return nil
 }
 
-// executeToolOperation executes a tool operation and emits appropriate events
-func (a *Agent) executeToolOperation(operation ToolOperation) {
+// ToolResult represents the result of a tool execution
+type ToolResult struct {
+	Success bool        `json:"success"`
+	Result  interface{} `json:"result,omitempty"`
+	Error   string      `json:"error,omitempty"`
+}
+
+// executeToolOperation executes a tool operation and returns structured result
+func (a *Agent) executeToolOperation(operation ToolOperation) ToolResult {
 	startTime := time.Now()
 	var err error
+	var result interface{}
 
 	switch op := operation.(type) {
 	case *CreateShapeOperation:
 		err = a.sceneManager.AddShapes([]ShapeRequest{op.Shape})
+		if err == nil {
+			// Return the created shape
+			result = op.Shape
+		}
 	case *UpdateShapeOperation:
 		// Capture before state
 		if beforeShape := a.sceneManager.FindShape(op.ID); beforeShape != nil {
@@ -136,6 +212,7 @@ func (a *Agent) executeToolOperation(operation ToolOperation) {
 		if err == nil {
 			if afterShape := a.sceneManager.FindShape(op.ID); afterShape != nil {
 				op.After = afterShape
+				result = afterShape
 			}
 		}
 	case *RemoveShapeOperation:
@@ -145,10 +222,24 @@ func (a *Agent) executeToolOperation(operation ToolOperation) {
 		}
 
 		err = a.sceneManager.RemoveShape(op.ID)
+		if err == nil {
+			result = map[string]string{"id": op.ID, "status": "removed"}
+		}
 	case *SetEnvironmentLightingOperation:
 		err = a.sceneManager.SetEnvironmentLighting(op.LightingType, op.TopColor, op.BottomColor, op.Emission)
+		if err == nil {
+			result = map[string]interface{}{
+				"lighting_type": op.LightingType,
+				"top_color":     op.TopColor,
+				"bottom_color":  op.BottomColor,
+				"emission":      op.Emission,
+			}
+		}
 	case *CreateLightOperation:
 		err = a.sceneManager.AddLights([]LightRequest{op.Light})
+		if err == nil {
+			result = op.Light
+		}
 	case *UpdateLightOperation:
 		// Capture before state
 		if beforeLight := a.sceneManager.FindLight(op.ID); beforeLight != nil {
@@ -161,6 +252,7 @@ func (a *Agent) executeToolOperation(operation ToolOperation) {
 		if err == nil {
 			if afterLight := a.sceneManager.FindLight(op.ID); afterLight != nil {
 				op.After = afterLight
+				result = afterLight
 			}
 		}
 	case *RemoveLightOperation:
@@ -170,12 +262,15 @@ func (a *Agent) executeToolOperation(operation ToolOperation) {
 		}
 
 		err = a.sceneManager.RemoveLight(op.ID)
+		if err == nil {
+			result = map[string]string{"id": op.ID, "status": "removed"}
+		}
 	}
 
 	// Calculate duration
 	duration := time.Since(startTime).Milliseconds()
 
-	// Emit ToolCallEvent
+	// Emit ToolCallEvent (for UI display)
 	var errorMsg string
 	success := err == nil
 	if err != nil {
@@ -183,6 +278,12 @@ func (a *Agent) executeToolOperation(operation ToolOperation) {
 	}
 
 	a.events <- NewToolCallEvent(operation, success, errorMsg, duration)
+
+	// Return structured result (for LLM feedback)
+	if success {
+		return ToolResult{Success: true, Result: result}
+	}
+	return ToolResult{Success: false, Error: errorMsg}
 }
 
 // addSceneContext prepends scene context to the latest user message
@@ -199,7 +300,32 @@ func (a *Agent) addSceneContext(conversation []*genai.Content, sceneContext stri
 	lastMessage := contextualizedConversation[len(contextualizedConversation)-1]
 	if lastMessage.Role == "user" && len(lastMessage.Parts) > 0 {
 		originalText := lastMessage.Parts[0].Text
-		contextualText := fmt.Sprintf("Context: You are a 3D scene assistant. %s\n\nUser request: %s", sceneContext, originalText)
+
+		systemPrompt := `You are an autonomous 3D scene creation assistant. Your job is to help users create and modify 3D scenes using raytracing.
+
+AVAILABLE TOOLS:
+You have access to tools for creating, updating, and removing shapes and lights. Each tool call will return a JSON result showing you what happened.
+
+WORKFLOW:
+1. Explain to the user what you're doing as you work
+2. Call tools to create/modify the scene
+3. Review tool results - if there are errors, retry with corrections
+4. Iterate until the scene matches the user's request
+5. When satisfied, provide a final response (text only, no tool calls) to signal completion
+
+TOOL RESULTS:
+- Success: {"success": true, "result": {<full object>}}
+- Error: {"success": false, "error": "<error message>"}
+
+The results show the complete state of each object, including any defaults that were applied. Use these to track what's in the scene and validate your work.
+
+CURRENT SCENE:
+%s
+
+USER REQUEST:
+%s`
+
+		contextualText := fmt.Sprintf(systemPrompt, sceneContext, originalText)
 
 		// Create a new part with the contextualized text
 		lastMessage.Parts[0] = &genai.Part{Text: contextualText}
@@ -216,7 +342,7 @@ func (a *Agent) generateContentWithRetry(ctx context.Context, model string, conv
 	var lastErr error
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		result, err := a.client.Models.GenerateContent(ctx, model, conversation, config)
+		result, err := a.llmClient.GenerateContent(ctx, model, conversation, config)
 		if err == nil {
 			if attempt > 0 {
 				log.Printf("Gemini API call succeeded on attempt %d", attempt+1)
