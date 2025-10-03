@@ -2,7 +2,7 @@
 
 Exploring agentic LLM patterns through 3D scene generation. Built as a natural language interface on top of [go-progressive-raytracer](https://github.com/df07/go-progressive-raytracer).
 
-![Scene LLM creating a snowman](renders/web%20interface.png)
+![Scene LLM creating a snowman](renders/web-interface.png)
 
 ## What is this?
 

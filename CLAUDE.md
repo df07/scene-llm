@@ -15,26 +15,23 @@ This file provides guidance to Claude Code when working with this repository.
 
 ```
 scene-llm/
-├── main.go                    # CLI entry point
+├── agent/                    # LLM agent with agentic loop, function calling, error recovery
 ├── web/
 │   ├── main.go               # Web server entry point
 │   ├── server/               # HTTP handlers, WebSocket, LLM chat integration
 │   └── static/               # HTML/JS/CSS for chat interface
-├── pkg/                      # Packages (to be created as needed)
+├── specs/                    # Design specifications
 └── go.mod                    # Imports go-progressive-raytracer as dependency
 ```
 
 ## Build Commands
 
 ```bash
-# Build CLI tool
-go build -o scene-llm main.go
-
-# Build web server
-cd web && go build -o scene-server main.go
-
-# Run web server with auto-reload (from web directory)
+# Run web server with auto-reload
 cd web && air
+
+# Or build and run manually
+cd web && go build -o scene-server main.go && ./scene-server
 
 # Run tests
 go test ./...

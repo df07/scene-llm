@@ -24,14 +24,7 @@ type ResponseEvent struct {
 
 func (e ResponseEvent) EventType() string { return "llm_response" }
 
-// Legacy ToolCallEvent - keeping temporarily for backward compatibility
-type LegacyToolCallEvent struct {
-	Shapes []ShapeRequest `json:"shapes"`
-}
-
-func (e LegacyToolCallEvent) EventType() string { return "function_calls" }
-
-// New ToolCallEvent using ToolOperation
+// ToolCallEvent using ToolOperation
 type ToolCallEvent struct {
 	Operation ToolOperation `json:"operation"` // The tool operation that was attempted
 	Success   bool          `json:"success"`   // Operation result
