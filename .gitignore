@@ -45,7 +45,6 @@ web/tmp/
 
 # Render output
 output/
-renders/
 
 # Profile files
 *.prof
