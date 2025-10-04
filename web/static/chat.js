@@ -271,8 +271,8 @@ class SceneLLMChat {
     }
 
     handleFunctionCalls(toolCallEvent) {
-        // Handle the new ToolCallEvent format
-        // toolCallEvent has: Request, Success, Error, Duration, Timestamp
+        // Handle the ToolCallEvent format
+        // toolCallEvent has: request, success, error, duration, timestamp
 
         // Create tool call message element
         const toolCallDiv = this.createToolCallElement(toolCallEvent);
@@ -320,7 +320,7 @@ class SceneLLMChat {
     }
 
     getToolCallSummary(toolCallEvent) {
-        const op = toolCallEvent.operation;
+        const op = toolCallEvent.request;
         const success = toolCallEvent.success;
 
         if (!success) {
@@ -347,7 +347,7 @@ class SceneLLMChat {
     }
 
     getToolCallDetails(toolCallEvent) {
-        const op = toolCallEvent.operation;
+        const op = toolCallEvent.request;
 
         let details = `
             <div class="tool-call-meta">
