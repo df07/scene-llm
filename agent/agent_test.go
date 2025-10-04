@@ -341,3 +341,77 @@ func TestAgenticLoopMixedSuccessFailure(t *testing.T) {
 
 	close(events)
 }
+
+// TestMultipleTextParts tests that multiple text parts are concatenated
+func TestMultipleTextParts(t *testing.T) {
+	events := make(chan AgentEvent, 100)
+
+	// Create a response with multiple text parts manually
+	mockClient := &MockLLMClient{
+		Responses: []*genai.GenerateContentResponse{
+			{
+				Candidates: []*genai.Candidate{
+					{
+						Content: &genai.Content{
+							Role: "model",
+							Parts: []*genai.Part{
+								{Text: "First part. "},
+								{Text: "Second part. "},
+								{Text: "Third part."},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	agent := NewWithMockLLM(events, mockClient)
+
+	conversation := []*genai.Content{
+		{
+			Role:  "user",
+			Parts: []*genai.Part{{Text: "Test multiple parts"}},
+		},
+	}
+
+	err := agent.ProcessMessage(context.Background(), conversation)
+	if err != nil {
+		t.Fatalf("ProcessMessage failed: %v", err)
+	}
+
+	// Collect events
+	var responseEvents []ResponseEvent
+	done := false
+	for !done {
+		select {
+		case event := <-events:
+			if re, ok := event.(ResponseEvent); ok {
+				responseEvents = append(responseEvents, re)
+			}
+			if _, ok := event.(CompleteEvent); ok {
+				done = true
+			}
+		default:
+			done = true
+		}
+	}
+
+	// Should have emitted 3 separate response events
+	if len(responseEvents) != 3 {
+		t.Fatalf("Expected 3 response events, got %d", len(responseEvents))
+	}
+
+	// Check each part was emitted separately
+	if responseEvents[0].Text != "First part. " {
+		t.Errorf("Expected first part %q, got %q", "First part. ", responseEvents[0].Text)
+	}
+	if responseEvents[1].Text != "Second part. " {
+		t.Errorf("Expected second part %q, got %q", "Second part. ", responseEvents[1].Text)
+	}
+	if responseEvents[2].Text != "Third part." {
+		t.Errorf("Expected third part %q, got %q", "Third part.", responseEvents[2].Text)
+	}
+
+	close(events)
+}

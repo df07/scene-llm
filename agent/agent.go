@@ -97,7 +97,6 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Conten
 			return fmt.Errorf("no response from LLM")
 		}
 
-		var textResponse string
 		var functionCalls []*genai.FunctionCall
 		var hasToolRequests bool
 
@@ -105,15 +104,13 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Conten
 		for _, part := range result.Candidates[0].Content.Parts {
 			if part.FunctionCall != nil {
 				functionCalls = append(functionCalls, part.FunctionCall)
+			} else if part.Text != "" {
+				// Emit each text part as a separate response event
+				a.events <- NewResponseEvent(part.Text)
+			} else {
+				// Log unexpected part types
+				log.Printf("WARNING: Received unexpected part type from LLM (not FunctionCall or Text)")
 			}
-			if part.Text != "" {
-				textResponse = part.Text
-			}
-		}
-
-		// Emit text response if we have one
-		if textResponse != "" {
-			a.events <- NewResponseEvent(textResponse)
 		}
 
 		// If no tool calls, we're done (LLM signaled completion)
