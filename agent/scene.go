@@ -207,8 +207,10 @@ func NewSceneManager() *SceneManager {
 			Shapes: []ShapeRequest{},
 			Lights: []LightRequest{},
 			Camera: CameraInfo{
-				Position: [3]float64{0, 0, 5},
+				Center:   [3]float64{0, 0, 5},
 				LookAt:   [3]float64{0, 0, 0},
+				VFov:     45.0,
+				Aperture: 0.0,
 			},
 		},
 	}
@@ -640,7 +642,7 @@ func (sm *SceneManager) updateCameraForShape(shape ShapeRequest) {
 	}
 
 	cameraDistance := size*3 + 5
-	sm.state.Camera.Position = [3]float64{
+	sm.state.Camera.Center = [3]float64{
 		position[0],
 		position[1],
 		position[2] + cameraDistance,
@@ -722,8 +724,10 @@ func (sm *SceneManager) BuildContext() string {
 func (sm *SceneManager) ClearScene() {
 	sm.state.Shapes = []ShapeRequest{}
 	sm.state.Camera = CameraInfo{
-		Position: [3]float64{0, 0, 5},
+		Center:   [3]float64{0, 0, 5},
 		LookAt:   [3]float64{0, 0, 0},
+		VFov:     45.0,
+		Aperture: 0.0,
 	}
 }
 
@@ -894,6 +898,23 @@ func (sm *SceneManager) RemoveLight(id string) error {
 	}
 
 	return fmt.Errorf("light with ID '%s' not found", id)
+}
+
+// SetCamera updates the camera configuration
+func (sm *SceneManager) SetCamera(camera CameraInfo) error {
+	// Validate vfov is in reasonable range
+	if camera.VFov <= 0 || camera.VFov >= 180 {
+		return fmt.Errorf("vfov must be between 0 and 180 degrees")
+	}
+
+	// Validate aperture is non-negative
+	if camera.Aperture < 0 {
+		return fmt.Errorf("aperture must be >= 0")
+	}
+
+	// Update camera state
+	sm.state.Camera = camera
+	return nil
 }
 
 // SetEnvironmentLighting sets the background/environment lighting for the scene
@@ -1232,14 +1253,14 @@ func (sm *SceneManager) ToRaytracerScene() (*scene.Scene, error) {
 
 	// Camera using our scene's camera settings
 	cameraConfig := geometry.CameraConfig{
-		Center:        core.NewVec3(sm.state.Camera.Position[0], sm.state.Camera.Position[1], sm.state.Camera.Position[2]),
+		Center:        core.NewVec3(sm.state.Camera.Center[0], sm.state.Camera.Center[1], sm.state.Camera.Center[2]),
 		LookAt:        core.NewVec3(sm.state.Camera.LookAt[0], sm.state.Camera.LookAt[1], sm.state.Camera.LookAt[2]),
 		Up:            core.NewVec3(0, 1, 0),
-		VFov:          45.0,
+		VFov:          sm.state.Camera.VFov,
 		Width:         samplingConfig.Width,
 		AspectRatio:   float64(samplingConfig.Width) / float64(samplingConfig.Height),
-		Aperture:      0.0,
-		FocusDistance: 0.0,
+		Aperture:      sm.state.Camera.Aperture,
+		FocusDistance: 0.0, // TODO: add focus distance control
 	}
 	camera := geometry.NewCamera(cameraConfig)
 

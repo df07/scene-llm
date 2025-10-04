@@ -68,12 +68,7 @@ func NewResponseEvent(text string) ResponseEvent {
 	return ResponseEvent{Text: text}
 }
 
-// Legacy helper - keeping for backward compatibility
-func NewLegacyToolCallEvent(shapes []ShapeRequest) LegacyToolCallEvent {
-	return LegacyToolCallEvent{Shapes: shapes}
-}
-
-// New helper for creating ToolCallEvent with ToolOperation
+// Helper for creating ToolCallEvent with ToolOperation
 func NewToolCallEvent(operation ToolOperation, success bool, errorMsg string, duration int64) ToolCallEvent {
 	return ToolCallEvent{
 		Operation: operation,
@@ -106,70 +101,83 @@ type ToolOperation interface {
 	Target() string   // Shape ID being operated on (if applicable), empty otherwise
 }
 
+// BaseOperation provides the common ToolType field for all operations
+type BaseOperation struct {
+	ToolType string `json:"tool_name"` // For JSON serialization
+}
+
 // Concrete tool operations - pure data structures describing LLM intentions
 type CreateShapeOperation struct {
-	Shape    ShapeRequest `json:"shape"`
-	ToolType string       `json:"tool_name"` // For JSON serialization
+	BaseOperation
+	Shape ShapeRequest `json:"shape"`
 }
 
 func (op CreateShapeOperation) ToolName() string { return "create_shape" }
 func (op CreateShapeOperation) Target() string   { return op.Shape.ID }
 
 type UpdateShapeOperation struct {
-	ID       string                 `json:"id"`
-	Updates  map[string]interface{} `json:"updates"`
-	Before   *ShapeRequest          `json:"before,omitempty"` // Populated by agent after execution
-	After    *ShapeRequest          `json:"after,omitempty"`  // Populated by agent after execution
-	ToolType string                 `json:"tool_name"`        // For JSON serialization
+	BaseOperation
+	ID      string                 `json:"id"`
+	Updates map[string]interface{} `json:"updates"`
+	Before  *ShapeRequest          `json:"before,omitempty"` // Populated by agent after execution
+	After   *ShapeRequest          `json:"after,omitempty"`  // Populated by agent after execution
 }
 
 func (op UpdateShapeOperation) ToolName() string { return "update_shape" }
 func (op UpdateShapeOperation) Target() string   { return op.ID }
 
 type RemoveShapeOperation struct {
+	BaseOperation
 	ID           string        `json:"id"`
 	RemovedShape *ShapeRequest `json:"removed_shape,omitempty"` // Populated by agent after execution
-	ToolType     string        `json:"tool_name"`               // For JSON serialization
 }
 
 func (op RemoveShapeOperation) ToolName() string { return "remove_shape" }
 func (op RemoveShapeOperation) Target() string   { return op.ID }
 
 type SetEnvironmentLightingOperation struct {
+	BaseOperation
 	LightingType string    `json:"lighting_type"`
 	TopColor     []float64 `json:"top_color,omitempty"`
 	BottomColor  []float64 `json:"bottom_color,omitempty"`
 	Emission     []float64 `json:"emission,omitempty"`
-	ToolType     string    `json:"tool_name"` // For JSON serialization
 }
 
 func (op SetEnvironmentLightingOperation) ToolName() string { return "set_environment_lighting" }
 func (op SetEnvironmentLightingOperation) Target() string   { return "" }
 
 type CreateLightOperation struct {
-	Light    LightRequest `json:"light"`
-	ToolType string       `json:"tool_name"` // For JSON serialization
+	BaseOperation
+	Light LightRequest `json:"light"`
 }
 
 func (op CreateLightOperation) ToolName() string { return "create_light" }
 func (op CreateLightOperation) Target() string   { return op.Light.ID }
 
 type UpdateLightOperation struct {
-	ID       string                 `json:"id"`
-	Updates  map[string]interface{} `json:"updates"`
-	Before   *LightRequest          `json:"before,omitempty"` // Populated by agent after execution
-	After    *LightRequest          `json:"after,omitempty"`  // Populated by agent after execution
-	ToolType string                 `json:"tool_name"`        // For JSON serialization
+	BaseOperation
+	ID      string                 `json:"id"`
+	Updates map[string]interface{} `json:"updates"`
+	Before  *LightRequest          `json:"before,omitempty"` // Populated by agent after execution
+	After   *LightRequest          `json:"after,omitempty"`  // Populated by agent after execution
 }
 
 func (op UpdateLightOperation) ToolName() string { return "update_light" }
 func (op UpdateLightOperation) Target() string   { return op.ID }
 
 type RemoveLightOperation struct {
+	BaseOperation
 	ID           string        `json:"id"`
 	RemovedLight *LightRequest `json:"removed_light,omitempty"` // Populated by agent after execution
-	ToolType     string        `json:"tool_name"`               // For JSON serialization
 }
 
 func (op RemoveLightOperation) ToolName() string { return "remove_light" }
 func (op RemoveLightOperation) Target() string   { return op.ID }
+
+type SetCameraOperation struct {
+	BaseOperation
+	Camera CameraInfo `json:"camera"`
+}
+
+func (op SetCameraOperation) ToolName() string { return "set_camera" }
+func (op SetCameraOperation) Target() string   { return "camera" }

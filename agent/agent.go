@@ -265,6 +265,11 @@ func (a *Agent) executeToolOperation(operation ToolOperation) ToolResult {
 		if err == nil {
 			result = map[string]string{"id": op.ID, "status": "removed"}
 		}
+	case *SetCameraOperation:
+		err = a.sceneManager.SetCamera(op.Camera)
+		if err == nil {
+			result = op.Camera
+		}
 	}
 
 	// Calculate duration

@@ -22,8 +22,10 @@ func TestNewSceneManager(t *testing.T) {
 	}
 
 	expectedCamera := CameraInfo{
-		Position: [3]float64{0, 0, 5},
+		Center:   [3]float64{0, 0, 5},
 		LookAt:   [3]float64{0, 0, 0},
+		VFov:     45.0,
+		Aperture: 0.0,
 	}
 	if state.Camera != expectedCamera {
 		t.Errorf("Expected camera %+v, got %+v", expectedCamera, state.Camera)
@@ -96,8 +98,10 @@ func TestAddShapesUpdatesCamera(t *testing.T) {
 	// Camera should be positioned relative to the first shape
 	// expectedDistance := radius*3 + 5 = 5.0*3 + 5 = 20
 	expectedCamera := CameraInfo{
-		Position: [3]float64{10, 20, 50}, // shape position Z + 20
+		Center:   [3]float64{10, 20, 50}, // shape position Z + 20
 		LookAt:   [3]float64{10, 20, 30}, // shape position
+		VFov:     45.0,
+		Aperture: 0.0,
 	}
 
 	if state.Camera != expectedCamera {
@@ -205,8 +209,10 @@ func TestClearScene(t *testing.T) {
 	// Check camera reset to default
 	state := sm.GetState()
 	expectedCamera := CameraInfo{
-		Position: [3]float64{0, 0, 5},
+		Center:   [3]float64{0, 0, 5},
 		LookAt:   [3]float64{0, 0, 0},
+		VFov:     45.0,
+		Aperture: 0.0,
 	}
 	if state.Camera != expectedCamera {
 		t.Errorf("Expected camera reset to %+v, got %+v", expectedCamera, state.Camera)
@@ -1674,6 +1680,121 @@ func TestDielectricMaterialValidation(t *testing.T) {
 			}
 			// Clear shapes for next test
 			sm.state.Shapes = []ShapeRequest{}
+		})
+	}
+}
+
+func TestSetCamera(t *testing.T) {
+	sm := NewSceneManager()
+
+	// Test valid camera configuration
+	newCamera := CameraInfo{
+		Center:   [3]float64{10, 5, 15},
+		LookAt:   [3]float64{0, 0, 0},
+		VFov:     60.0,
+		Aperture: 0.1,
+	}
+
+	err := sm.SetCamera(newCamera)
+	if err != nil {
+		t.Fatalf("SetCamera() with valid config returned error: %v", err)
+	}
+
+	state := sm.GetState()
+	if state.Camera != newCamera {
+		t.Errorf("Camera not updated correctly. Expected %+v, got %+v", newCamera, state.Camera)
+	}
+}
+
+func TestSetCameraValidation(t *testing.T) {
+	sm := NewSceneManager()
+
+	tests := []struct {
+		name        string
+		camera      CameraInfo
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name: "valid camera",
+			camera: CameraInfo{
+				Center:   [3]float64{1, 2, 3},
+				LookAt:   [3]float64{0, 0, 0},
+				VFov:     45.0,
+				Aperture: 0.0,
+			},
+			expectError: false,
+		},
+		{
+			name: "invalid vfov - too low",
+			camera: CameraInfo{
+				Center:   [3]float64{1, 2, 3},
+				LookAt:   [3]float64{0, 0, 0},
+				VFov:     0.0,
+				Aperture: 0.0,
+			},
+			expectError: true,
+			errorMsg:    "vfov must be between 0 and 180 degrees",
+		},
+		{
+			name: "invalid vfov - too high",
+			camera: CameraInfo{
+				Center:   [3]float64{1, 2, 3},
+				LookAt:   [3]float64{0, 0, 0},
+				VFov:     180.0,
+				Aperture: 0.0,
+			},
+			expectError: true,
+			errorMsg:    "vfov must be between 0 and 180 degrees",
+		},
+		{
+			name: "invalid vfov - negative",
+			camera: CameraInfo{
+				Center:   [3]float64{1, 2, 3},
+				LookAt:   [3]float64{0, 0, 0},
+				VFov:     -10.0,
+				Aperture: 0.0,
+			},
+			expectError: true,
+			errorMsg:    "vfov must be between 0 and 180 degrees",
+		},
+		{
+			name: "invalid aperture - negative",
+			camera: CameraInfo{
+				Center:   [3]float64{1, 2, 3},
+				LookAt:   [3]float64{0, 0, 0},
+				VFov:     45.0,
+				Aperture: -0.5,
+			},
+			expectError: true,
+			errorMsg:    "aperture must be >= 0",
+		},
+		{
+			name: "wide angle camera",
+			camera: CameraInfo{
+				Center:   [3]float64{0, 10, 0},
+				LookAt:   [3]float64{0, 0, 0},
+				VFov:     120.0,
+				Aperture: 0.2,
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := sm.SetCamera(tt.camera)
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("Expected error but got none")
+				} else if !strings.Contains(err.Error(), tt.errorMsg) {
+					t.Errorf("Expected error containing '%s', got: %v", tt.errorMsg, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Expected no error, got: %v", err)
+				}
+			}
 		})
 	}
 }

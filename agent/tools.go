@@ -45,8 +45,10 @@ type SceneState struct {
 
 // CameraInfo represents camera information
 type CameraInfo struct {
-	Position [3]float64 `json:"position"`
+	Center   [3]float64 `json:"center"`
 	LookAt   [3]float64 `json:"look_at"`
+	VFov     float64    `json:"vfov"`     // Vertical field of view in degrees
+	Aperture float64    `json:"aperture"` // Lens aperture for depth of field
 }
 
 // createShapeToolDeclaration returns the function declaration for shape creation
@@ -223,6 +225,40 @@ func removeLightToolDeclaration() *genai.FunctionDeclaration {
 	}
 }
 
+func setCameraToolDeclaration() *genai.FunctionDeclaration {
+	return &genai.FunctionDeclaration{
+		Name:        "set_camera",
+		Description: "Set camera position and properties for viewing the scene",
+		Parameters: &genai.Schema{
+			Type: genai.TypeObject,
+			Properties: map[string]*genai.Schema{
+				"center": {
+					Type:        genai.TypeArray,
+					Description: "Camera position as [x, y, z]",
+					Items: &genai.Schema{
+						Type: genai.TypeNumber,
+					},
+				},
+				"look_at": {
+					Type:        genai.TypeArray,
+					Description: "Point the camera looks at as [x, y, z]",
+					Items: &genai.Schema{
+						Type: genai.TypeNumber,
+					},
+				},
+				"vfov": {
+					Type:        genai.TypeNumber,
+					Description: "Vertical field of view in degrees (default: 45.0)",
+				},
+				"aperture": {
+					Type:        genai.TypeNumber,
+					Description: "Lens aperture for depth of field effect (0.0 = no blur, default: 0.0)",
+				},
+			},
+		},
+	}
+}
+
 // getAllToolDeclarations returns all available tool declarations
 func getAllToolDeclarations() []*genai.FunctionDeclaration {
 	return []*genai.FunctionDeclaration{
@@ -233,6 +269,7 @@ func getAllToolDeclarations() []*genai.FunctionDeclaration {
 		updateLightToolDeclaration(),
 		removeLightToolDeclaration(),
 		setEnvironmentLightingToolDeclaration(),
+		setCameraToolDeclaration(),
 	}
 }
 
@@ -324,6 +361,8 @@ func parseToolOperationFromFunctionCall(call *genai.FunctionCall) ToolOperation 
 		return parseRemoveLightOperation(call)
 	case "set_environment_lighting":
 		return parseSetEnvironmentLightingOperation(call)
+	case "set_camera":
+		return parseSetCameraOperation(call)
 	default:
 		return nil
 	}
@@ -354,8 +393,8 @@ func parseCreateShapeOperation(call *genai.FunctionCall) *CreateShapeOperation {
 	}
 
 	return &CreateShapeOperation{
-		Shape:    shape,
-		ToolType: "create_shape",
+		BaseOperation: BaseOperation{ToolType: "create_shape"},
+		Shape:         shape,
 	}
 }
 
@@ -367,7 +406,7 @@ func parseUpdateShapeOperation(call *genai.FunctionCall) *UpdateShapeOperation {
 
 	args := call.Args
 	operation := &UpdateShapeOperation{
-		ToolType: "update_shape",
+		BaseOperation: BaseOperation{ToolType: "update_shape"},
 	}
 
 	// Extract ID
@@ -391,7 +430,7 @@ func parseRemoveShapeOperation(call *genai.FunctionCall) *RemoveShapeOperation {
 
 	args := call.Args
 	operation := &RemoveShapeOperation{
-		ToolType: "remove_shape",
+		BaseOperation: BaseOperation{ToolType: "remove_shape"},
 	}
 
 	// Extract ID
@@ -410,7 +449,7 @@ func parseSetEnvironmentLightingOperation(call *genai.FunctionCall) *SetEnvironm
 
 	args := call.Args
 	operation := &SetEnvironmentLightingOperation{
-		ToolType: "set_environment_lighting",
+		BaseOperation: BaseOperation{ToolType: "set_environment_lighting"},
 	}
 
 	// Extract lighting type
@@ -477,8 +516,8 @@ func parseCreateLightOperation(call *genai.FunctionCall) *CreateLightOperation {
 	}
 
 	return &CreateLightOperation{
-		Light:    light,
-		ToolType: "create_light",
+		BaseOperation: BaseOperation{ToolType: "create_light"},
+		Light:         light,
 	}
 }
 
@@ -490,7 +529,7 @@ func parseUpdateLightOperation(call *genai.FunctionCall) *UpdateLightOperation {
 
 	args := call.Args
 	operation := &UpdateLightOperation{
-		ToolType: "update_light",
+		BaseOperation: BaseOperation{ToolType: "update_light"},
 	}
 
 	// Extract ID
@@ -514,12 +553,57 @@ func parseRemoveLightOperation(call *genai.FunctionCall) *RemoveLightOperation {
 
 	args := call.Args
 	operation := &RemoveLightOperation{
-		ToolType: "remove_light",
+		BaseOperation: BaseOperation{ToolType: "remove_light"},
 	}
 
 	// Extract ID
 	if id, ok := extractStringArg(args, "id"); ok {
 		operation.ID = id
+	}
+
+	return operation
+}
+
+func parseSetCameraOperation(call *genai.FunctionCall) *SetCameraOperation {
+	if call.Name != "set_camera" {
+		return nil
+	}
+
+	args := call.Args
+	operation := &SetCameraOperation{
+		BaseOperation: BaseOperation{ToolType: "set_camera"},
+		Camera: CameraInfo{
+			VFov:     45.0, // defaults
+			Aperture: 0.0,
+		},
+	}
+
+	// Extract center
+	if centerInterface, ok := args["center"].([]interface{}); ok && len(centerInterface) == 3 {
+		for i, val := range centerInterface {
+			if f, ok := val.(float64); ok {
+				operation.Camera.Center[i] = f
+			}
+		}
+	}
+
+	// Extract look_at
+	if lookAtInterface, ok := args["look_at"].([]interface{}); ok && len(lookAtInterface) == 3 {
+		for i, val := range lookAtInterface {
+			if f, ok := val.(float64); ok {
+				operation.Camera.LookAt[i] = f
+			}
+		}
+	}
+
+	// Extract vfov (optional)
+	if vfov, ok := args["vfov"].(float64); ok {
+		operation.Camera.VFov = vfov
+	}
+
+	// Extract aperture (optional)
+	if aperture, ok := args["aperture"].(float64); ok {
+		operation.Camera.Aperture = aperture
 	}
 
 	return operation
