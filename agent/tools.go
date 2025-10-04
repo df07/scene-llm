@@ -4,23 +4,9 @@ import (
 	"google.golang.org/genai"
 )
 
-// Helper functions for extracting values from function call arguments
-
-// extractStringArg extracts a string argument from function call args
-func extractStringArg(args map[string]interface{}, key string) (string, bool) {
-	if val, ok := args[key].(string); ok {
-		return val, true
-	}
-	return "", false
-}
-
-// extractMapArg extracts a map argument from function call args
-func extractMapArg(args map[string]interface{}, key string) (map[string]interface{}, bool) {
-	if val, ok := args[key].(map[string]interface{}); ok {
-		return val, true
-	}
-	return nil, false
-}
+// ------------------------------------------------------------
+// Request types - raw data from LLM function calls
+// ------------------------------------------------------------
 
 // ShapeRequest represents a shape creation/update request from the LLM
 type ShapeRequest struct {
@@ -36,19 +22,81 @@ type LightRequest struct {
 	Properties map[string]interface{} `json:"properties"`
 }
 
-// SceneState represents the current 3D scene state
-type SceneState struct {
-	Shapes []ShapeRequest `json:"shapes"`
-	Lights []LightRequest `json:"lights"`
-	Camera CameraInfo     `json:"camera"`
+// ------------------------------------------------------------
+// Operation types - structured tool operations for execution
+// ------------------------------------------------------------
+
+type BaseOperation struct {
+	ToolType string `json:"tool_name"`    // For JSON serialization
+	Id       string `json:"id,omitempty"` // Optional target ID (shape/light ID, or special like "camera")
 }
 
-// CameraInfo represents camera information
-type CameraInfo struct {
-	Center   [3]float64 `json:"center"`
-	LookAt   [3]float64 `json:"look_at"`
-	VFov     float64    `json:"vfov"`     // Vertical field of view in degrees
-	Aperture float64    `json:"aperture"` // Lens aperture for depth of field
+// ToolName returns the tool type from the BaseOperation
+func (op BaseOperation) ToolName() string { return op.ToolType }
+
+// Target returns the target ID from the BaseOperation
+func (op BaseOperation) Target() string { return op.Id }
+
+// Concrete tool operations - pure data structures describing LLM intentions
+type CreateShapeOperation struct {
+	BaseOperation
+	Shape ShapeRequest `json:"shape"`
+}
+
+type UpdateShapeOperation struct {
+	BaseOperation
+	Updates map[string]interface{} `json:"updates"`
+	Before  *ShapeRequest          `json:"before,omitempty"` // Populated by agent after execution
+	After   *ShapeRequest          `json:"after,omitempty"`  // Populated by agent after execution
+}
+
+type RemoveShapeOperation struct {
+	BaseOperation
+	RemovedShape *ShapeRequest `json:"removed_shape,omitempty"` // Populated by agent after execution
+}
+
+type SetEnvironmentLightingOperation struct {
+	BaseOperation
+	LightingType string    `json:"lighting_type"`
+	TopColor     []float64 `json:"top_color,omitempty"`
+	BottomColor  []float64 `json:"bottom_color,omitempty"`
+	Emission     []float64 `json:"emission,omitempty"`
+}
+
+type CreateLightOperation struct {
+	BaseOperation
+	Light LightRequest `json:"light"`
+}
+
+type UpdateLightOperation struct {
+	BaseOperation
+	Updates map[string]interface{} `json:"updates"`
+	Before  *LightRequest          `json:"before,omitempty"` // Populated by agent after execution
+	After   *LightRequest          `json:"after,omitempty"`  // Populated by agent after execution
+}
+
+type RemoveLightOperation struct {
+	BaseOperation
+	RemovedLight *LightRequest `json:"removed_light,omitempty"` // Populated by agent after execution
+}
+
+type SetCameraOperation struct {
+	BaseOperation
+	Camera CameraInfo `json:"camera"`
+}
+
+// getAllToolDeclarations returns all available tool declarations
+func getAllToolDeclarations() []*genai.FunctionDeclaration {
+	return []*genai.FunctionDeclaration{
+		createShapeToolDeclaration(),
+		updateShapeToolDeclaration(),
+		removeShapeToolDeclaration(),
+		createLightToolDeclaration(),
+		updateLightToolDeclaration(),
+		removeLightToolDeclaration(),
+		setEnvironmentLightingToolDeclaration(),
+		setCameraToolDeclaration(),
+	}
 }
 
 // createShapeToolDeclaration returns the function declaration for shape creation
@@ -259,89 +307,6 @@ func setCameraToolDeclaration() *genai.FunctionDeclaration {
 	}
 }
 
-// getAllToolDeclarations returns all available tool declarations
-func getAllToolDeclarations() []*genai.FunctionDeclaration {
-	return []*genai.FunctionDeclaration{
-		createShapeToolDeclaration(),
-		updateShapeToolDeclaration(),
-		removeShapeToolDeclaration(),
-		createLightToolDeclaration(),
-		updateLightToolDeclaration(),
-		removeLightToolDeclaration(),
-		setEnvironmentLightingToolDeclaration(),
-		setCameraToolDeclaration(),
-	}
-}
-
-// parseShapeFromFunctionCall extracts a ShapeRequest from a function call
-func parseShapeFromFunctionCall(call *genai.FunctionCall) *ShapeRequest {
-	if call.Name != "create_shape" {
-		return nil
-	}
-
-	var shape ShapeRequest
-	args := call.Args
-
-	// Extract ID
-	if id, ok := extractStringArg(args, "id"); ok {
-		shape.ID = id
-	}
-
-	// Extract type
-	if shapeType, ok := extractStringArg(args, "type"); ok {
-		shape.Type = shapeType
-	}
-
-	// Extract properties as-is (let SceneManager validate them)
-	if props, ok := extractMapArg(args, "properties"); ok {
-		shape.Properties = props
-	}
-
-	return &shape
-}
-
-// ShapeUpdate represents an update request for an existing shape
-type ShapeUpdate struct {
-	ID      string                 `json:"id"`      // ID of shape to update
-	Updates map[string]interface{} `json:"updates"` // Fields to update
-}
-
-// parseUpdateFromFunctionCall extracts a ShapeUpdate from an update_shape function call
-func parseUpdateFromFunctionCall(call *genai.FunctionCall) *ShapeUpdate {
-	if call.Name != "update_shape" {
-		return nil
-	}
-
-	var update ShapeUpdate
-	args := call.Args
-
-	// Extract ID
-	if id, ok := extractStringArg(args, "id"); ok {
-		update.ID = id
-	}
-
-	// Extract updates
-	if updates, ok := extractMapArg(args, "updates"); ok {
-		update.Updates = updates
-	}
-
-	return &update
-}
-
-// parseRemoveFromFunctionCall extracts shape ID from a remove_shape function call
-func parseRemoveFromFunctionCall(call *genai.FunctionCall) string {
-	if call.Name != "remove_shape" {
-		return ""
-	}
-
-	args := call.Args
-	if id, ok := extractStringArg(args, "id"); ok {
-		return id
-	}
-
-	return ""
-}
-
 // New parsing functions that create ToolOperation objects
 
 // parseToolOperationFromFunctionCall creates a ToolOperation from any function call
@@ -370,150 +335,53 @@ func parseToolOperationFromFunctionCall(call *genai.FunctionCall) ToolOperation 
 
 // parseCreateShapeOperation creates a CreateShapeOperation from a create_shape function call
 func parseCreateShapeOperation(call *genai.FunctionCall) *CreateShapeOperation {
-	if call.Name != "create_shape" {
-		return nil
-	}
-
-	var shape ShapeRequest
-	args := call.Args
-
-	// Extract ID
-	if id, ok := extractStringArg(args, "id"); ok {
-		shape.ID = id
-	}
-
-	// Extract type
-	if shapeType, ok := extractStringArg(args, "type"); ok {
-		shape.Type = shapeType
-	}
-
-	// Extract properties as-is (let SceneManager validate them)
-	if props, ok := extractMapArg(args, "properties"); ok {
-		shape.Properties = props
-	}
+	shape := extractShapeRequest(call.Args)
 
 	return &CreateShapeOperation{
-		BaseOperation: BaseOperation{ToolType: "create_shape"},
+		BaseOperation: BaseOperation{ToolType: "create_shape", Id: shape.ID},
 		Shape:         shape,
 	}
 }
 
 // parseUpdateShapeOperation creates an UpdateShapeOperation from an update_shape function call
 func parseUpdateShapeOperation(call *genai.FunctionCall) *UpdateShapeOperation {
-	if call.Name != "update_shape" {
-		return nil
-	}
+	id, _ := extractStringArg(call.Args, "id")
+	updates, _ := extractMapArg(call.Args, "updates")
 
-	args := call.Args
-	operation := &UpdateShapeOperation{
-		BaseOperation: BaseOperation{ToolType: "update_shape"},
+	return &UpdateShapeOperation{
+		BaseOperation: BaseOperation{ToolType: "update_shape", Id: id},
+		Updates:       updates,
 	}
-
-	// Extract ID
-	if id, ok := extractStringArg(args, "id"); ok {
-		operation.ID = id
-	}
-
-	// Extract updates
-	if updates, ok := extractMapArg(args, "updates"); ok {
-		operation.Updates = updates
-	}
-
-	return operation
 }
 
 // parseRemoveShapeOperation creates a RemoveShapeOperation from a remove_shape function call
 func parseRemoveShapeOperation(call *genai.FunctionCall) *RemoveShapeOperation {
-	if call.Name != "remove_shape" {
-		return nil
-	}
+	id, _ := extractStringArg(call.Args, "id")
 
-	args := call.Args
-	operation := &RemoveShapeOperation{
-		BaseOperation: BaseOperation{ToolType: "remove_shape"},
+	return &RemoveShapeOperation{
+		BaseOperation: BaseOperation{ToolType: "remove_shape", Id: id},
 	}
-
-	// Extract ID
-	if id, ok := extractStringArg(args, "id"); ok {
-		operation.ID = id
-	}
-
-	return operation
 }
 
 // parseSetEnvironmentLightingOperation creates a SetEnvironmentLightingOperation from a set_environment_lighting function call
 func parseSetEnvironmentLightingOperation(call *genai.FunctionCall) *SetEnvironmentLightingOperation {
-	if call.Name != "set_environment_lighting" {
-		return nil
-	}
+	lightingType, _ := extractStringArg(call.Args, "type")
+	topColor, _ := extractFloatArrayArg(call.Args, "top_color")
+	bottomColor, _ := extractFloatArrayArg(call.Args, "bottom_color")
+	emission, _ := extractFloatArrayArg(call.Args, "emission")
 
-	args := call.Args
-	operation := &SetEnvironmentLightingOperation{
+	return &SetEnvironmentLightingOperation{
 		BaseOperation: BaseOperation{ToolType: "set_environment_lighting"},
+		LightingType:  lightingType,
+		TopColor:      topColor,
+		BottomColor:   bottomColor,
+		Emission:      emission,
 	}
-
-	// Extract lighting type
-	if lightingType, ok := extractStringArg(args, "type"); ok {
-		operation.LightingType = lightingType
-	}
-
-	// Extract optional color arrays
-	if topColorInterface, ok := args["top_color"].([]interface{}); ok {
-		var topColor []float64
-		for _, val := range topColorInterface {
-			if f, ok := val.(float64); ok {
-				topColor = append(topColor, f)
-			}
-		}
-		operation.TopColor = topColor
-	}
-
-	if bottomColorInterface, ok := args["bottom_color"].([]interface{}); ok {
-		var bottomColor []float64
-		for _, val := range bottomColorInterface {
-			if f, ok := val.(float64); ok {
-				bottomColor = append(bottomColor, f)
-			}
-		}
-		operation.BottomColor = bottomColor
-	}
-
-	if emissionInterface, ok := args["emission"].([]interface{}); ok {
-		var emission []float64
-		for _, val := range emissionInterface {
-			if f, ok := val.(float64); ok {
-				emission = append(emission, f)
-			}
-		}
-		operation.Emission = emission
-	}
-
-	return operation
 }
 
 // parseCreateLightOperation creates a CreateLightOperation from a create_light function call
 func parseCreateLightOperation(call *genai.FunctionCall) *CreateLightOperation {
-	if call.Name != "create_light" {
-		return nil
-	}
-
-	var light LightRequest
-	args := call.Args
-
-	// Extract ID
-	if id, ok := extractStringArg(args, "id"); ok {
-		light.ID = id
-	}
-
-	// Extract type
-	if lightType, ok := extractStringArg(args, "type"); ok {
-		light.Type = lightType
-	}
-
-	// Extract properties as-is (let SceneManager validate them)
-	if props, ok := extractMapArg(args, "properties"); ok {
-		light.Properties = props
-	}
+	light := extractLightRequest(call.Args)
 
 	return &CreateLightOperation{
 		BaseOperation: BaseOperation{ToolType: "create_light"},
@@ -523,88 +391,130 @@ func parseCreateLightOperation(call *genai.FunctionCall) *CreateLightOperation {
 
 // parseUpdateLightOperation creates an UpdateLightOperation from an update_light function call
 func parseUpdateLightOperation(call *genai.FunctionCall) *UpdateLightOperation {
-	if call.Name != "update_light" {
-		return nil
-	}
+	id, _ := extractStringArg(call.Args, "id")
+	updates, _ := extractMapArg(call.Args, "updates")
 
-	args := call.Args
-	operation := &UpdateLightOperation{
-		BaseOperation: BaseOperation{ToolType: "update_light"},
+	return &UpdateLightOperation{
+		BaseOperation: BaseOperation{ToolType: "update_light", Id: id},
+		Updates:       updates,
 	}
-
-	// Extract ID
-	if id, ok := extractStringArg(args, "id"); ok {
-		operation.ID = id
-	}
-
-	// Extract updates
-	if updates, ok := extractMapArg(args, "updates"); ok {
-		operation.Updates = updates
-	}
-
-	return operation
 }
 
 // parseRemoveLightOperation creates a RemoveLightOperation from a remove_light function call
 func parseRemoveLightOperation(call *genai.FunctionCall) *RemoveLightOperation {
-	if call.Name != "remove_light" {
-		return nil
-	}
+	id, _ := extractStringArg(call.Args, "id")
 
-	args := call.Args
-	operation := &RemoveLightOperation{
-		BaseOperation: BaseOperation{ToolType: "remove_light"},
+	return &RemoveLightOperation{
+		BaseOperation: BaseOperation{ToolType: "remove_light", Id: id},
 	}
-
-	// Extract ID
-	if id, ok := extractStringArg(args, "id"); ok {
-		operation.ID = id
-	}
-
-	return operation
 }
 
 func parseSetCameraOperation(call *genai.FunctionCall) *SetCameraOperation {
-	if call.Name != "set_camera" {
-		return nil
-	}
+	center, _ := extractFloatArrayArg(call.Args, "center")
+	lookAt, _ := extractFloatArrayArg(call.Args, "look_at")
+	vfov, hasVFov := extractFloatArg(call.Args, "vfov")
+	aperture, _ := extractFloatArg(call.Args, "aperture")
 
-	args := call.Args
-	operation := &SetCameraOperation{
+	// Apply defaults for optional parameters
+	if !hasVFov || vfov == 0 {
+		vfov = 45.0
+	}
+	// aperture defaults to 0.0 (already handled by zero value)
+
+	return &SetCameraOperation{
 		BaseOperation: BaseOperation{ToolType: "set_camera"},
 		Camera: CameraInfo{
-			VFov:     45.0, // defaults
-			Aperture: 0.0,
+			Center:   center,
+			LookAt:   lookAt,
+			VFov:     vfov,
+			Aperture: aperture,
 		},
 	}
+}
 
-	// Extract center
-	if centerInterface, ok := args["center"].([]interface{}); ok && len(centerInterface) == 3 {
-		for i, val := range centerInterface {
-			if f, ok := val.(float64); ok {
-				operation.Camera.Center[i] = f
+// ------------------------------------------------------------
+// Helper functions
+// ------------------------------------------------------------
+
+// extractStringArg extracts a string argument from function call args
+func extractStringArg(args map[string]interface{}, key string) (string, bool) {
+	if val, ok := args[key].(string); ok {
+		return val, true
+	}
+	return "", false
+}
+
+// extractMapArg extracts a map argument from function call args
+func extractMapArg(args map[string]interface{}, key string) (map[string]interface{}, bool) {
+	if val, ok := args[key].(map[string]interface{}); ok {
+		return val, true
+	}
+	return nil, false
+}
+
+func extractFloatArg(args map[string]interface{}, key string) (float64, bool) {
+	if val, ok := args[key].(float64); ok {
+		return val, true
+	}
+	return 0, false
+}
+
+func extractFloatArrayArg(args map[string]interface{}, key string) ([]float64, bool) {
+	// Handle []float64 directly
+	if val, ok := args[key].([]float64); ok {
+		return val, true
+	}
+
+	// Handle []interface{} (from JSON/function calls)
+	if val, ok := args[key].([]interface{}); ok {
+		result := make([]float64, len(val))
+		for i, v := range val {
+			if f, ok := v.(float64); ok {
+				result[i] = f
+			} else {
+				return nil, false
 			}
 		}
+		return result, true
 	}
 
-	// Extract look_at
-	if lookAtInterface, ok := args["look_at"].([]interface{}); ok && len(lookAtInterface) == 3 {
-		for i, val := range lookAtInterface {
-			if f, ok := val.(float64); ok {
-				operation.Camera.LookAt[i] = f
+	return nil, false
+}
+
+func extractFloat3ArrayArg(args map[string]interface{}, key string) ([3]float64, bool) {
+	// Handle [3]float64 directly
+	if val, ok := args[key].([3]float64); ok {
+		return val, true
+	}
+
+	// Handle []interface{} (from JSON/function calls)
+	if val, ok := args[key].([]interface{}); ok && len(val) == 3 {
+		var result [3]float64
+		for i, v := range val {
+			if f, ok := v.(float64); ok {
+				result[i] = f
+			} else {
+				return [3]float64{}, false
 			}
 		}
+		return result, true
 	}
 
-	// Extract vfov (optional)
-	if vfov, ok := args["vfov"].(float64); ok {
-		operation.Camera.VFov = vfov
-	}
+	return [3]float64{}, false
+}
 
-	// Extract aperture (optional)
-	if aperture, ok := args["aperture"].(float64); ok {
-		operation.Camera.Aperture = aperture
-	}
+func extractShapeRequest(args map[string]interface{}) ShapeRequest {
+	shape := ShapeRequest{}
+	shape.ID, _ = extractStringArg(args, "id")
+	shape.Type, _ = extractStringArg(args, "type")
+	shape.Properties, _ = extractMapArg(args, "properties")
+	return shape
+}
 
-	return operation
+func extractLightRequest(args map[string]interface{}) LightRequest {
+	light := LightRequest{}
+	light.ID, _ = extractStringArg(args, "id")
+	light.Type, _ = extractStringArg(args, "type")
+	light.Properties, _ = extractMapArg(args, "properties")
+	return light
 }

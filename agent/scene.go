@@ -10,6 +10,21 @@ import (
 	"github.com/df07/go-progressive-raytracer/pkg/scene"
 )
 
+// SceneState represents the current 3D scene state
+type SceneState struct {
+	Shapes []ShapeRequest `json:"shapes"`
+	Lights []LightRequest `json:"lights"`
+	Camera CameraInfo     `json:"camera"`
+}
+
+// CameraInfo represents camera information
+type CameraInfo struct {
+	Center   []float64 `json:"center"`
+	LookAt   []float64 `json:"look_at"`
+	VFov     float64   `json:"vfov"`     // Vertical field of view in degrees
+	Aperture float64   `json:"aperture"` // Lens aperture for depth of field
+}
+
 // Helper functions for extracting properties from map[string]interface{}
 
 // extractFloatArray extracts a float array of specified length from properties
@@ -207,8 +222,8 @@ func NewSceneManager() *SceneManager {
 			Shapes: []ShapeRequest{},
 			Lights: []LightRequest{},
 			Camera: CameraInfo{
-				Center:   [3]float64{0, 0, 5},
-				LookAt:   [3]float64{0, 0, 0},
+				Center:   []float64{0, 0, 5},
+				LookAt:   []float64{0, 0, 0},
 				VFov:     45.0,
 				Aperture: 0.0,
 			},
@@ -642,12 +657,12 @@ func (sm *SceneManager) updateCameraForShape(shape ShapeRequest) {
 	}
 
 	cameraDistance := size*3 + 5
-	sm.state.Camera.Center = [3]float64{
+	sm.state.Camera.Center = []float64{
 		position[0],
 		position[1],
 		position[2] + cameraDistance,
 	}
-	sm.state.Camera.LookAt = position
+	sm.state.Camera.LookAt = []float64{position[0], position[1], position[2]}
 }
 
 // GetState returns a deep copy of the current scene state
@@ -724,8 +739,8 @@ func (sm *SceneManager) BuildContext() string {
 func (sm *SceneManager) ClearScene() {
 	sm.state.Shapes = []ShapeRequest{}
 	sm.state.Camera = CameraInfo{
-		Center:   [3]float64{0, 0, 5},
-		LookAt:   [3]float64{0, 0, 0},
+		Center:   []float64{0, 0, 5},
+		LookAt:   []float64{0, 0, 0},
 		VFov:     45.0,
 		Aperture: 0.0,
 	}
@@ -902,6 +917,29 @@ func (sm *SceneManager) RemoveLight(id string) error {
 
 // SetCamera updates the camera configuration
 func (sm *SceneManager) SetCamera(camera CameraInfo) error {
+	// Validate center is provided and has correct length
+	if camera.Center == nil {
+		return fmt.Errorf("camera center must be provided")
+	}
+	if len(camera.Center) != 3 {
+		return fmt.Errorf("camera center must have exactly 3 values")
+	}
+
+	// Validate lookAt is provided and has correct length
+	if camera.LookAt == nil {
+		return fmt.Errorf("camera look_at must be provided")
+	}
+	if len(camera.LookAt) != 3 {
+		return fmt.Errorf("camera look_at must have exactly 3 values")
+	}
+
+	// Validate center and lookAt are different
+	if camera.Center[0] == camera.LookAt[0] &&
+		camera.Center[1] == camera.LookAt[1] &&
+		camera.Center[2] == camera.LookAt[2] {
+		return fmt.Errorf("camera center and look_at cannot be the same point")
+	}
+
 	// Validate vfov is in reasonable range
 	if camera.VFov <= 0 || camera.VFov >= 180 {
 		return fmt.Errorf("vfov must be between 0 and 180 degrees")

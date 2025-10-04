@@ -5,6 +5,24 @@ import (
 	"testing"
 )
 
+// Helper function to compare CameraInfo structs (since slices can't be compared with ==)
+func cameraEqual(a, b CameraInfo) bool {
+	if len(a.Center) != len(b.Center) || len(a.LookAt) != len(b.LookAt) {
+		return false
+	}
+	for i := range a.Center {
+		if a.Center[i] != b.Center[i] {
+			return false
+		}
+	}
+	for i := range a.LookAt {
+		if a.LookAt[i] != b.LookAt[i] {
+			return false
+		}
+	}
+	return a.VFov == b.VFov && a.Aperture == b.Aperture
+}
+
 func TestNewSceneManager(t *testing.T) {
 	sm := NewSceneManager()
 
@@ -22,12 +40,12 @@ func TestNewSceneManager(t *testing.T) {
 	}
 
 	expectedCamera := CameraInfo{
-		Center:   [3]float64{0, 0, 5},
-		LookAt:   [3]float64{0, 0, 0},
+		Center:   []float64{0, 0, 5},
+		LookAt:   []float64{0, 0, 0},
 		VFov:     45.0,
 		Aperture: 0.0,
 	}
-	if state.Camera != expectedCamera {
+	if !cameraEqual(state.Camera, expectedCamera) {
 		t.Errorf("Expected camera %+v, got %+v", expectedCamera, state.Camera)
 	}
 }
@@ -98,13 +116,13 @@ func TestAddShapesUpdatesCamera(t *testing.T) {
 	// Camera should be positioned relative to the first shape
 	// expectedDistance := radius*3 + 5 = 5.0*3 + 5 = 20
 	expectedCamera := CameraInfo{
-		Center:   [3]float64{10, 20, 50}, // shape position Z + 20
-		LookAt:   [3]float64{10, 20, 30}, // shape position
+		Center:   []float64{10, 20, 50}, // shape position Z + 20
+		LookAt:   []float64{10, 20, 30}, // shape position
 		VFov:     45.0,
 		Aperture: 0.0,
 	}
 
-	if state.Camera != expectedCamera {
+	if !cameraEqual(state.Camera, expectedCamera) {
 		t.Errorf("Expected camera %+v, got %+v", expectedCamera, state.Camera)
 	}
 }
@@ -209,12 +227,12 @@ func TestClearScene(t *testing.T) {
 	// Check camera reset to default
 	state := sm.GetState()
 	expectedCamera := CameraInfo{
-		Center:   [3]float64{0, 0, 5},
-		LookAt:   [3]float64{0, 0, 0},
+		Center:   []float64{0, 0, 5},
+		LookAt:   []float64{0, 0, 0},
 		VFov:     45.0,
 		Aperture: 0.0,
 	}
-	if state.Camera != expectedCamera {
+	if !cameraEqual(state.Camera, expectedCamera) {
 		t.Errorf("Expected camera reset to %+v, got %+v", expectedCamera, state.Camera)
 	}
 }
@@ -1689,8 +1707,8 @@ func TestSetCamera(t *testing.T) {
 
 	// Test valid camera configuration
 	newCamera := CameraInfo{
-		Center:   [3]float64{10, 5, 15},
-		LookAt:   [3]float64{0, 0, 0},
+		Center:   []float64{10, 5, 15},
+		LookAt:   []float64{0, 0, 0},
 		VFov:     60.0,
 		Aperture: 0.1,
 	}
@@ -1701,7 +1719,7 @@ func TestSetCamera(t *testing.T) {
 	}
 
 	state := sm.GetState()
-	if state.Camera != newCamera {
+	if !cameraEqual(state.Camera, newCamera) {
 		t.Errorf("Camera not updated correctly. Expected %+v, got %+v", newCamera, state.Camera)
 	}
 }
@@ -1718,8 +1736,8 @@ func TestSetCameraValidation(t *testing.T) {
 		{
 			name: "valid camera",
 			camera: CameraInfo{
-				Center:   [3]float64{1, 2, 3},
-				LookAt:   [3]float64{0, 0, 0},
+				Center:   []float64{1, 2, 3},
+				LookAt:   []float64{0, 0, 0},
 				VFov:     45.0,
 				Aperture: 0.0,
 			},
@@ -1728,8 +1746,8 @@ func TestSetCameraValidation(t *testing.T) {
 		{
 			name: "invalid vfov - too low",
 			camera: CameraInfo{
-				Center:   [3]float64{1, 2, 3},
-				LookAt:   [3]float64{0, 0, 0},
+				Center:   []float64{1, 2, 3},
+				LookAt:   []float64{0, 0, 0},
 				VFov:     0.0,
 				Aperture: 0.0,
 			},
@@ -1739,8 +1757,8 @@ func TestSetCameraValidation(t *testing.T) {
 		{
 			name: "invalid vfov - too high",
 			camera: CameraInfo{
-				Center:   [3]float64{1, 2, 3},
-				LookAt:   [3]float64{0, 0, 0},
+				Center:   []float64{1, 2, 3},
+				LookAt:   []float64{0, 0, 0},
 				VFov:     180.0,
 				Aperture: 0.0,
 			},
@@ -1750,8 +1768,8 @@ func TestSetCameraValidation(t *testing.T) {
 		{
 			name: "invalid vfov - negative",
 			camera: CameraInfo{
-				Center:   [3]float64{1, 2, 3},
-				LookAt:   [3]float64{0, 0, 0},
+				Center:   []float64{1, 2, 3},
+				LookAt:   []float64{0, 0, 0},
 				VFov:     -10.0,
 				Aperture: 0.0,
 			},
@@ -1761,8 +1779,8 @@ func TestSetCameraValidation(t *testing.T) {
 		{
 			name: "invalid aperture - negative",
 			camera: CameraInfo{
-				Center:   [3]float64{1, 2, 3},
-				LookAt:   [3]float64{0, 0, 0},
+				Center:   []float64{1, 2, 3},
+				LookAt:   []float64{0, 0, 0},
 				VFov:     45.0,
 				Aperture: -0.5,
 			},
@@ -1772,8 +1790,8 @@ func TestSetCameraValidation(t *testing.T) {
 		{
 			name: "wide angle camera",
 			camera: CameraInfo{
-				Center:   [3]float64{0, 10, 0},
-				LookAt:   [3]float64{0, 0, 0},
+				Center:   []float64{0, 10, 0},
+				LookAt:   []float64{0, 0, 0},
 				VFov:     120.0,
 				Aperture: 0.2,
 			},

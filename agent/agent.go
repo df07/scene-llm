@@ -202,28 +202,28 @@ func (a *Agent) executeToolOperation(operation ToolOperation) ToolResult {
 		}
 	case *UpdateShapeOperation:
 		// Capture before state
-		if beforeShape := a.sceneManager.FindShape(op.ID); beforeShape != nil {
+		if beforeShape := a.sceneManager.FindShape(op.Id); beforeShape != nil {
 			op.Before = beforeShape
 		}
 
-		err = a.sceneManager.UpdateShape(op.ID, op.Updates)
+		err = a.sceneManager.UpdateShape(op.Id, op.Updates)
 
 		// Capture after state if successful
 		if err == nil {
-			if afterShape := a.sceneManager.FindShape(op.ID); afterShape != nil {
+			if afterShape := a.sceneManager.FindShape(op.Id); afterShape != nil {
 				op.After = afterShape
 				result = afterShape
 			}
 		}
 	case *RemoveShapeOperation:
 		// Capture shape before removal
-		if beforeShape := a.sceneManager.FindShape(op.ID); beforeShape != nil {
+		if beforeShape := a.sceneManager.FindShape(op.Id); beforeShape != nil {
 			op.RemovedShape = beforeShape
 		}
 
-		err = a.sceneManager.RemoveShape(op.ID)
+		err = a.sceneManager.RemoveShape(op.Id)
 		if err == nil {
-			result = map[string]string{"id": op.ID, "status": "removed"}
+			result = map[string]string{"id": op.Id, "status": "removed"}
 		}
 	case *SetEnvironmentLightingOperation:
 		err = a.sceneManager.SetEnvironmentLighting(op.LightingType, op.TopColor, op.BottomColor, op.Emission)
@@ -242,28 +242,28 @@ func (a *Agent) executeToolOperation(operation ToolOperation) ToolResult {
 		}
 	case *UpdateLightOperation:
 		// Capture before state
-		if beforeLight := a.sceneManager.FindLight(op.ID); beforeLight != nil {
+		if beforeLight := a.sceneManager.FindLight(op.Id); beforeLight != nil {
 			op.Before = beforeLight
 		}
 
-		err = a.sceneManager.UpdateLight(op.ID, op.Updates)
+		err = a.sceneManager.UpdateLight(op.Id, op.Updates)
 
 		// Capture after state if successful
 		if err == nil {
-			if afterLight := a.sceneManager.FindLight(op.ID); afterLight != nil {
+			if afterLight := a.sceneManager.FindLight(op.Id); afterLight != nil {
 				op.After = afterLight
 				result = afterLight
 			}
 		}
 	case *RemoveLightOperation:
 		// Capture light before removal
-		if beforeLight := a.sceneManager.FindLight(op.ID); beforeLight != nil {
+		if beforeLight := a.sceneManager.FindLight(op.Id); beforeLight != nil {
 			op.RemovedLight = beforeLight
 		}
 
-		err = a.sceneManager.RemoveLight(op.ID)
+		err = a.sceneManager.RemoveLight(op.Id)
 		if err == nil {
-			result = map[string]string{"id": op.ID, "status": "removed"}
+			result = map[string]string{"id": op.Id, "status": "removed"}
 		}
 	case *SetCameraOperation:
 		err = a.sceneManager.SetCamera(op.Camera)

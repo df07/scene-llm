@@ -178,7 +178,8 @@ func TestSetEnvironmentLightingToolParsing(t *testing.T) {
 					"type": "gradient",
 				},
 			},
-			expectNil: true,
+			expectNil:  false,
+			expectType: "gradient", // Parser doesn't check function name, just extracts args
 		},
 		{
 			name: "malformed color arrays",
@@ -219,7 +220,7 @@ func TestLightReplacement(t *testing.T) {
 	sm := NewSceneManager()
 
 	// Add gradient lighting
-	err := sm.SetEnvironmentLighting("gradient", []float64{1.0, 0.5, 0.0}, []float64{0.0, 0.5, 1.0}, nil)
+	err := sm.SetEnvironmentLighting("gradient", []float64{1.0, 0.5, 0.0}, []float64{0.0, 0.5, 1.0}, []float64{0.0, 0.0, 0.0})
 	if err != nil {
 		t.Fatalf("Failed to set gradient lighting: %v", err)
 	}
@@ -701,8 +702,8 @@ func TestLightToolParsing(t *testing.T) {
 	if updateOp == nil {
 		t.Fatal("Failed to parse update_light operation")
 	}
-	if updateOp.ID != "test_light" {
-		t.Errorf("Expected update ID 'test_light', got '%s'", updateOp.ID)
+	if updateOp.Id != "test_light" {
+		t.Errorf("Expected update ID 'test_light', got '%s'", updateOp.Id)
 	}
 
 	// Test remove_light parsing
@@ -717,27 +718,12 @@ func TestLightToolParsing(t *testing.T) {
 	if removeOp == nil {
 		t.Fatal("Failed to parse remove_light operation")
 	}
-	if removeOp.ID != "test_light" {
-		t.Errorf("Expected remove ID 'test_light', got '%s'", removeOp.ID)
+	if removeOp.Id != "test_light" {
+		t.Errorf("Expected remove ID 'test_light', got '%s'", removeOp.Id)
 	}
 
-	// Test wrong function name
-	wrongCall := &genai.FunctionCall{
-		Name: "wrong_function",
-		Args: map[string]interface{}{
-			"id": "test",
-		},
-	}
-
-	if parseCreateLightOperation(wrongCall) != nil {
-		t.Error("Expected nil for wrong function name in create_light parser")
-	}
-	if parseUpdateLightOperation(wrongCall) != nil {
-		t.Error("Expected nil for wrong function name in update_light parser")
-	}
-	if parseRemoveLightOperation(wrongCall) != nil {
-		t.Error("Expected nil for wrong function name in remove_light parser")
-	}
+	// Note: Parsers no longer check function names (redundant since caller checks)
+	// They will parse any args passed to them
 }
 
 func TestSceneConversionWithPositionedLights(t *testing.T) {

@@ -154,7 +154,7 @@ type UpdateShapeOperation struct {
 }
 
 func (op UpdateShapeOperation) ToolName() string { return "update_shape" }
-func (op UpdateShapeOperation) Target() string { return op.ID }
+func (op UpdateShapeOperation) Target() string { return op.TargetId }
 
 type RemoveShapeOperation struct {
     ID           string        `json:"id"`
@@ -162,7 +162,7 @@ type RemoveShapeOperation struct {
 }
 
 func (op RemoveShapeOperation) ToolName() string { return "remove_shape" }
-func (op RemoveShapeOperation) Target() string { return op.ID }
+func (op RemoveShapeOperation) Target() string { return op.TargetId }
 ```
 
 ### Tool Operation Examples

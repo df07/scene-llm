@@ -19,6 +19,7 @@ func TestExecuteToolOperationWithoutAPI(t *testing.T) {
 	// Test create operation
 	t.Run("CreateShape", func(t *testing.T) {
 		operation := &CreateShapeOperation{
+			BaseOperation: BaseOperation{ToolType: "create_shape"},
 			Shape: ShapeRequest{
 				ID:   "test_sphere",
 				Type: "sphere",
@@ -66,7 +67,7 @@ func TestExecuteToolOperationWithoutAPI(t *testing.T) {
 	// Test update operation
 	t.Run("UpdateShape", func(t *testing.T) {
 		operation := &UpdateShapeOperation{
-			ID: "test_sphere",
+			BaseOperation: BaseOperation{ToolType: "update_shape", Id: "test_sphere"},
 			Updates: map[string]interface{}{
 				"properties": map[string]interface{}{
 					"color": []interface{}{0.0, 1.0, 0.0}, // Change to green
@@ -111,7 +112,7 @@ func TestExecuteToolOperationWithoutAPI(t *testing.T) {
 	// Test remove operation
 	t.Run("RemoveShape", func(t *testing.T) {
 		operation := &RemoveShapeOperation{
-			ID: "test_sphere",
+			BaseOperation: BaseOperation{ToolType: "remove_shape", Id: "test_sphere"},
 		}
 
 		// Execute the operation
@@ -152,7 +153,7 @@ func TestExecuteToolOperationWithoutAPI(t *testing.T) {
 	// Test error case
 	t.Run("ErrorCase", func(t *testing.T) {
 		operation := &UpdateShapeOperation{
-			ID: "nonexistent_shape",
+			BaseOperation: BaseOperation{ToolType: "update_shape", Id: "nonexistent_shape"},
 			Updates: map[string]interface{}{
 				"properties": map[string]interface{}{
 					"color": []interface{}{0.0, 1.0, 0.0},
