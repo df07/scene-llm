@@ -24,13 +24,13 @@ type ResponseEvent struct {
 
 func (e ResponseEvent) EventType() string { return "llm_response" }
 
-// ToolCallEvent using ToolOperation
+// ToolCallEvent using ToolRequest
 type ToolCallEvent struct {
-	Operation ToolOperation `json:"operation"` // The tool operation that was attempted
-	Success   bool          `json:"success"`   // Operation result
-	Error     string        `json:"error,omitempty"`
-	Duration  int64         `json:"duration"`  // Operation duration in ms
-	Timestamp time.Time     `json:"timestamp"` // When the operation occurred
+	Request   ToolRequest `json:"request"` // The tool request that was attempted
+	Success   bool        `json:"success"` // Tool request result
+	Error     string      `json:"error,omitempty"`
+	Duration  int64       `json:"duration"`  // Tool request duration in ms
+	Timestamp time.Time   `json:"timestamp"` // When the tool request occurred
 }
 
 func (e ToolCallEvent) EventType() string { return "function_calls" }
@@ -68,10 +68,10 @@ func NewResponseEvent(text string) ResponseEvent {
 	return ResponseEvent{Text: text}
 }
 
-// Helper for creating ToolCallEvent with ToolOperation
-func NewToolCallEvent(operation ToolOperation, success bool, errorMsg string, duration int64) ToolCallEvent {
+// Helper for creating ToolCallEvent with ToolRequest
+func NewToolCallEvent(request ToolRequest, success bool, errorMsg string, duration int64) ToolCallEvent {
 	return ToolCallEvent{
-		Operation: operation,
+		Request:   request,
 		Success:   success,
 		Error:     errorMsg,
 		Duration:  duration,
@@ -95,8 +95,8 @@ func NewCompleteEvent() CompleteEvent {
 	return CompleteEvent{Message: "Processing finished"}
 }
 
-// ToolOperation interface - describes what the LLM wanted to do
-type ToolOperation interface {
+// ToolRequest interface - describes what the LLM wanted to do
+type ToolRequest interface {
 	ToolName() string // "create_shape", "update_shape", "remove_shape"
 	Target() string   // Shape ID being operated on (if applicable), empty otherwise
 }

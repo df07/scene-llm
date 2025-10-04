@@ -106,7 +106,7 @@ func TestSetEnvironmentLightingToolCall(t *testing.T) {
 		},
 	}
 
-	operation := parseSetEnvironmentLightingOperation(functionCall)
+	operation := parseSetEnvironmentLightingRequest(functionCall)
 	if operation == nil {
 		t.Fatal("Failed to parse set_environment_lighting operation")
 	}
@@ -198,7 +198,7 @@ func TestSetEnvironmentLightingToolParsing(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			operation := parseSetEnvironmentLightingOperation(tt.functionCall)
+			operation := parseSetEnvironmentLightingRequest(tt.functionCall)
 
 			if tt.expectNil {
 				if operation != nil {
@@ -674,7 +674,7 @@ func TestLightToolParsing(t *testing.T) {
 		},
 	}
 
-	createOp := parseCreateLightOperation(createCall)
+	createOp := parseCreateLightRequest(createCall)
 	if createOp == nil {
 		t.Fatal("Failed to parse create_light operation")
 	}
@@ -698,7 +698,7 @@ func TestLightToolParsing(t *testing.T) {
 		},
 	}
 
-	updateOp := parseUpdateLightOperation(updateCall)
+	updateOp := parseUpdateLightRequest(updateCall)
 	if updateOp == nil {
 		t.Fatal("Failed to parse update_light operation")
 	}
@@ -714,7 +714,7 @@ func TestLightToolParsing(t *testing.T) {
 		},
 	}
 
-	removeOp := parseRemoveLightOperation(removeCall)
+	removeOp := parseRemoveLightRequest(removeCall)
 	if removeOp == nil {
 		t.Fatal("Failed to parse remove_light operation")
 	}

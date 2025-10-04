@@ -380,10 +380,10 @@ func (s *Server) handleToolCallEvent(sessionID string, event agent.ToolCallEvent
 	// Log to server with terse format as specified in our spec
 	if event.Success {
 		log.Printf("INFO  [session:%s] Tool call: %s (%s)",
-			sessionID, event.Operation.ToolName(), event.Operation.Target())
+			sessionID, event.Request.ToolName(), event.Request.Target())
 	} else {
 		log.Printf("INFO  [session:%s] Tool call: %s (%s)",
-			sessionID, event.Operation.ToolName(), event.Operation.Target())
+			sessionID, event.Request.ToolName(), event.Request.Target())
 		log.Printf("ERROR [session:%s] Tool call FAILED", sessionID)
 		log.Printf("      %s", event.Error)
 	}

@@ -99,7 +99,7 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Conten
 
 		var textResponse string
 		var functionCalls []*genai.FunctionCall
-		var hasShapeOperations bool
+		var hasToolRequests bool
 
 		// Collect all parts from the response
 		for _, part := range result.Candidates[0].Content.Parts {
@@ -124,10 +124,10 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Conten
 		// Execute tool calls and collect results
 		var functionResponses []*genai.Part
 		for _, fc := range functionCalls {
-			operation := parseToolOperationFromFunctionCall(fc)
+			operation := parseToolRequestFromFunctionCall(fc)
 			if operation != nil {
-				hasShapeOperations = true
-				toolResult := a.executeToolOperation(operation)
+				hasToolRequests = true
+				toolResult := a.executeToolRequests(operation)
 
 				// Convert ToolResult to map for FunctionResponse
 				resultMap := make(map[string]any)
@@ -150,14 +150,14 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Conten
 		}
 
 		// Emit scene render event if any operations were performed
-		if hasShapeOperations {
+		if hasToolRequests {
 			raytracerScene, err := a.sceneManager.ToRaytracerScene()
 			if err != nil {
 				a.events <- NewErrorEvent(fmt.Errorf("failed to create scene: %w", err))
 			} else {
 				a.events <- NewSceneRenderEvent(raytracerScene)
 			}
-			hasShapeOperations = false // Reset for next iteration
+			hasToolRequests = false // Reset for next iteration
 		}
 
 		// Append assistant's response to conversation
@@ -187,20 +187,20 @@ type ToolResult struct {
 	Error   string      `json:"error,omitempty"`
 }
 
-// executeToolOperation executes a tool operation and returns structured result
-func (a *Agent) executeToolOperation(operation ToolOperation) ToolResult {
+// executeToolRequests executes a tool operation and returns structured result
+func (a *Agent) executeToolRequests(operation ToolRequest) ToolResult {
 	startTime := time.Now()
 	var err error
 	var result interface{}
 
 	switch op := operation.(type) {
-	case *CreateShapeOperation:
+	case *CreateShapeRequest:
 		err = a.sceneManager.AddShapes([]ShapeRequest{op.Shape})
 		if err == nil {
 			// Return the created shape
 			result = op.Shape
 		}
-	case *UpdateShapeOperation:
+	case *UpdateShapeRequest:
 		// Capture before state
 		if beforeShape := a.sceneManager.FindShape(op.Id); beforeShape != nil {
 			op.Before = beforeShape
@@ -215,7 +215,7 @@ func (a *Agent) executeToolOperation(operation ToolOperation) ToolResult {
 				result = afterShape
 			}
 		}
-	case *RemoveShapeOperation:
+	case *RemoveShapeRequest:
 		// Capture shape before removal
 		if beforeShape := a.sceneManager.FindShape(op.Id); beforeShape != nil {
 			op.RemovedShape = beforeShape
@@ -225,7 +225,7 @@ func (a *Agent) executeToolOperation(operation ToolOperation) ToolResult {
 		if err == nil {
 			result = map[string]string{"id": op.Id, "status": "removed"}
 		}
-	case *SetEnvironmentLightingOperation:
+	case *SetEnvironmentLightingRequest:
 		err = a.sceneManager.SetEnvironmentLighting(op.LightingType, op.TopColor, op.BottomColor, op.Emission)
 		if err == nil {
 			result = map[string]interface{}{
@@ -235,12 +235,12 @@ func (a *Agent) executeToolOperation(operation ToolOperation) ToolResult {
 				"emission":      op.Emission,
 			}
 		}
-	case *CreateLightOperation:
+	case *CreateLightRequest:
 		err = a.sceneManager.AddLights([]LightRequest{op.Light})
 		if err == nil {
 			result = op.Light
 		}
-	case *UpdateLightOperation:
+	case *UpdateLightRequest:
 		// Capture before state
 		if beforeLight := a.sceneManager.FindLight(op.Id); beforeLight != nil {
 			op.Before = beforeLight
@@ -255,7 +255,7 @@ func (a *Agent) executeToolOperation(operation ToolOperation) ToolResult {
 				result = afterLight
 			}
 		}
-	case *RemoveLightOperation:
+	case *RemoveLightRequest:
 		// Capture light before removal
 		if beforeLight := a.sceneManager.FindLight(op.Id); beforeLight != nil {
 			op.RemovedLight = beforeLight
@@ -265,7 +265,7 @@ func (a *Agent) executeToolOperation(operation ToolOperation) ToolResult {
 		if err == nil {
 			result = map[string]string{"id": op.Id, "status": "removed"}
 		}
-	case *SetCameraOperation:
+	case *SetCameraRequest:
 		err = a.sceneManager.SetCamera(op.Camera)
 		if err == nil {
 			result = op.Camera

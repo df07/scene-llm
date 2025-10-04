@@ -272,7 +272,7 @@ class SceneLLMChat {
 
     handleFunctionCalls(toolCallEvent) {
         // Handle the new ToolCallEvent format
-        // toolCallEvent has: Operation, Success, Error, Duration, Timestamp
+        // toolCallEvent has: Request, Success, Error, Duration, Timestamp
 
         // Create tool call message element
         const toolCallDiv = this.createToolCallElement(toolCallEvent);
@@ -328,7 +328,7 @@ class SceneLLMChat {
         }
 
         // Completely generic approach
-        const target = this.getOperationTarget(op);
+        const target = this.getToolRequestTarget(op);
         const displayName = this.getToolDisplayName(op.tool_name);
 
         if (target) {
@@ -352,7 +352,7 @@ class SceneLLMChat {
         let details = `
             <div class="tool-call-meta">
                 <strong>Function:</strong> ${op.tool_name}<br>
-                <strong>Target:</strong> ${this.getOperationTarget(op) || 'N/A'}<br>
+                <strong>Target:</strong> ${this.getToolRequestTarget(op) || 'N/A'}<br>
                 <strong>Status:</strong> ${toolCallEvent.success ? '✓ Success' : '❌ Failed'}<br>
                 <strong>Duration:</strong> ${toolCallEvent.duration}ms<br>
             </div>
@@ -368,7 +368,7 @@ class SceneLLMChat {
         return details;
     }
 
-    getOperationTarget(op) {
+    getToolRequestTarget(op) {
         // Try common patterns to extract a target identifier
 
         // Direct ID field (update/remove operations)
@@ -411,7 +411,7 @@ class SceneLLMChat {
         delete properties.tool_name;
 
         if (Object.keys(properties).length > 0) {
-            details += `<strong>Operation Data:</strong> <pre>${this.formatCompactJSON(properties)}</pre>`;
+            details += `<strong>Tool Request Data:</strong> <pre>${this.formatCompactJSON(properties)}</pre>`;
         }
 
         details += '</div>';

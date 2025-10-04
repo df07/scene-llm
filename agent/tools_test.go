@@ -6,7 +6,7 @@ import (
 	"google.golang.org/genai"
 )
 
-func TestParseToolOperationFromFunctionCall(t *testing.T) {
+func TestParseToolRequestFromFunctionCall(t *testing.T) {
 	tests := []struct {
 		name           string
 		functionCall   *genai.FunctionCall
@@ -69,7 +69,7 @@ func TestParseToolOperationFromFunctionCall(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			operation := parseToolOperationFromFunctionCall(tt.functionCall)
+			operation := parseToolRequestFromFunctionCall(tt.functionCall)
 
 			if tt.expectedType == "" {
 				if operation != nil {

@@ -346,7 +346,7 @@ func TestMalformedLLMInput(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Parse the operation
-			op := parseToolOperationFromFunctionCall(tt.call)
+			op := parseToolRequestFromFunctionCall(tt.call)
 			if op == nil {
 				t.Fatal("Expected operation to be non-nil")
 			}
@@ -354,15 +354,15 @@ func TestMalformedLLMInput(t *testing.T) {
 			// Execute based on operation type
 			var err error
 			switch typedOp := op.(type) {
-			case *CreateShapeOperation:
+			case *CreateShapeRequest:
 				err = sm.AddShapes([]ShapeRequest{typedOp.Shape})
-			case *UpdateShapeOperation:
+			case *UpdateShapeRequest:
 				err = sm.UpdateShape(typedOp.Id, typedOp.Updates)
-			case *RemoveShapeOperation:
+			case *RemoveShapeRequest:
 				err = sm.RemoveShape(typedOp.Id)
-			case *SetCameraOperation:
+			case *SetCameraRequest:
 				err = sm.SetCamera(typedOp.Camera)
-			case *CreateLightOperation:
+			case *CreateLightRequest:
 				err = sm.AddLights([]LightRequest{typedOp.Light})
 			default:
 				t.Fatalf("Unexpected operation type: %T", op)

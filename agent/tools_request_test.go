@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-// Test the executeToolOperation method without requiring Google API
-func TestExecuteToolOperationWithoutAPI(t *testing.T) {
+// Test the executeToolRequest method without requiring Google API
+func TestExecuteToolRequestWithoutAPI(t *testing.T) {
 	// Create agent components manually to avoid API requirement
 	events := make(chan AgentEvent, 10)
 	sceneManager := NewSceneManager()
@@ -18,8 +18,8 @@ func TestExecuteToolOperationWithoutAPI(t *testing.T) {
 
 	// Test create operation
 	t.Run("CreateShape", func(t *testing.T) {
-		operation := &CreateShapeOperation{
-			BaseOperation: BaseOperation{ToolType: "create_shape"},
+		operation := &CreateShapeRequest{
+			BaseToolRequest: BaseToolRequest{ToolType: "create_shape"},
 			Shape: ShapeRequest{
 				ID:   "test_sphere",
 				Type: "sphere",
@@ -32,7 +32,7 @@ func TestExecuteToolOperationWithoutAPI(t *testing.T) {
 		}
 
 		// Execute the operation
-		agent.executeToolOperation(operation)
+		agent.executeToolRequests(operation)
 
 		// Check that a ToolCallEvent was emitted
 		select {
@@ -46,8 +46,8 @@ func TestExecuteToolOperationWithoutAPI(t *testing.T) {
 				t.Errorf("Expected operation to succeed, got error: %s", toolEvent.Error)
 			}
 
-			if toolEvent.Operation.ToolName() != "create_shape" {
-				t.Errorf("Expected ToolName to be 'create_shape', got '%s'", toolEvent.Operation.ToolName())
+			if toolEvent.Request.ToolName() != "create_shape" {
+				t.Errorf("Expected ToolName to be 'create_shape', got '%s'", toolEvent.Request.ToolName())
 			}
 
 			if toolEvent.Duration < 0 {
@@ -66,8 +66,8 @@ func TestExecuteToolOperationWithoutAPI(t *testing.T) {
 
 	// Test update operation
 	t.Run("UpdateShape", func(t *testing.T) {
-		operation := &UpdateShapeOperation{
-			BaseOperation: BaseOperation{ToolType: "update_shape", Id: "test_sphere"},
+		operation := &UpdateShapeRequest{
+			BaseToolRequest: BaseToolRequest{ToolType: "update_shape", Id: "test_sphere"},
 			Updates: map[string]interface{}{
 				"properties": map[string]interface{}{
 					"color": []interface{}{0.0, 1.0, 0.0}, // Change to green
@@ -76,7 +76,7 @@ func TestExecuteToolOperationWithoutAPI(t *testing.T) {
 		}
 
 		// Execute the operation
-		agent.executeToolOperation(operation)
+		agent.executeToolRequests(operation)
 
 		// Check that a ToolCallEvent was emitted
 		select {
@@ -91,9 +91,9 @@ func TestExecuteToolOperationWithoutAPI(t *testing.T) {
 			}
 
 			// Check that before/after state was captured
-			updateOp, ok := toolEvent.Operation.(*UpdateShapeOperation)
+			updateOp, ok := toolEvent.Request.(*UpdateShapeRequest)
 			if !ok {
-				t.Fatalf("Expected UpdateShapeOperation, got %T", toolEvent.Operation)
+				t.Fatalf("Expected UpdateShapeRequest, got %T", toolEvent.Request)
 			}
 
 			if updateOp.Before == nil {
@@ -111,12 +111,12 @@ func TestExecuteToolOperationWithoutAPI(t *testing.T) {
 
 	// Test remove operation
 	t.Run("RemoveShape", func(t *testing.T) {
-		operation := &RemoveShapeOperation{
-			BaseOperation: BaseOperation{ToolType: "remove_shape", Id: "test_sphere"},
+		operation := &RemoveShapeRequest{
+			BaseToolRequest: BaseToolRequest{ToolType: "remove_shape", Id: "test_sphere"},
 		}
 
 		// Execute the operation
-		agent.executeToolOperation(operation)
+		agent.executeToolRequests(operation)
 
 		// Check that a ToolCallEvent was emitted
 		select {
@@ -131,9 +131,9 @@ func TestExecuteToolOperationWithoutAPI(t *testing.T) {
 			}
 
 			// Check that removed shape was captured
-			removeOp, ok := toolEvent.Operation.(*RemoveShapeOperation)
+			removeOp, ok := toolEvent.Request.(*RemoveShapeRequest)
 			if !ok {
-				t.Fatalf("Expected RemoveShapeOperation, got %T", toolEvent.Operation)
+				t.Fatalf("Expected RemoveShapeRequest, got %T", toolEvent.Request)
 			}
 
 			if removeOp.RemovedShape == nil {
@@ -152,8 +152,8 @@ func TestExecuteToolOperationWithoutAPI(t *testing.T) {
 
 	// Test error case
 	t.Run("ErrorCase", func(t *testing.T) {
-		operation := &UpdateShapeOperation{
-			BaseOperation: BaseOperation{ToolType: "update_shape", Id: "nonexistent_shape"},
+		operation := &UpdateShapeRequest{
+			BaseToolRequest: BaseToolRequest{ToolType: "update_shape", Id: "nonexistent_shape"},
 			Updates: map[string]interface{}{
 				"properties": map[string]interface{}{
 					"color": []interface{}{0.0, 1.0, 0.0},
@@ -162,7 +162,7 @@ func TestExecuteToolOperationWithoutAPI(t *testing.T) {
 		}
 
 		// Execute the operation
-		agent.executeToolOperation(operation)
+		agent.executeToolRequests(operation)
 
 		// Check that a failed ToolCallEvent was emitted
 		select {
@@ -187,7 +187,7 @@ func TestExecuteToolOperationWithoutAPI(t *testing.T) {
 }
 
 func TestToolCallEventCreation(t *testing.T) {
-	operation := &CreateShapeOperation{
+	operation := &CreateShapeRequest{
 		Shape: ShapeRequest{
 			ID:   "test_sphere",
 			Type: "sphere",
@@ -200,8 +200,8 @@ func TestToolCallEventCreation(t *testing.T) {
 
 	event := NewToolCallEvent(operation, true, "", 25)
 
-	if event.Operation != operation {
-		t.Error("Expected Operation to match the provided operation")
+	if event.Request != operation {
+		t.Error("Expected Request to match the provided operation")
 	}
 
 	if !event.Success {

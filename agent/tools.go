@@ -23,65 +23,65 @@ type LightRequest struct {
 }
 
 // ------------------------------------------------------------
-// Operation types - structured tool operations for execution
+// Tool request types - structured requests for execution
 // ------------------------------------------------------------
 
-type BaseOperation struct {
+type BaseToolRequest struct {
 	ToolType string `json:"tool_name"`    // For JSON serialization
 	Id       string `json:"id,omitempty"` // Optional target ID (shape/light ID, or special like "camera")
 }
 
-// ToolName returns the tool type from the BaseOperation
-func (op BaseOperation) ToolName() string { return op.ToolType }
+// ToolName returns the tool type from the BaseToolRequest
+func (op BaseToolRequest) ToolName() string { return op.ToolType }
 
-// Target returns the target ID from the BaseOperation
-func (op BaseOperation) Target() string { return op.Id }
+// Target returns the target ID from the BaseToolRequest
+func (op BaseToolRequest) Target() string { return op.Id }
 
-// Concrete tool operations - pure data structures describing LLM intentions
-type CreateShapeOperation struct {
-	BaseOperation
+// Concrete tool requests - pure data structures describing LLM intentions
+type CreateShapeRequest struct {
+	BaseToolRequest
 	Shape ShapeRequest `json:"shape"`
 }
 
-type UpdateShapeOperation struct {
-	BaseOperation
+type UpdateShapeRequest struct {
+	BaseToolRequest
 	Updates map[string]interface{} `json:"updates"`
 	Before  *ShapeRequest          `json:"before,omitempty"` // Populated by agent after execution
 	After   *ShapeRequest          `json:"after,omitempty"`  // Populated by agent after execution
 }
 
-type RemoveShapeOperation struct {
-	BaseOperation
+type RemoveShapeRequest struct {
+	BaseToolRequest
 	RemovedShape *ShapeRequest `json:"removed_shape,omitempty"` // Populated by agent after execution
 }
 
-type SetEnvironmentLightingOperation struct {
-	BaseOperation
+type SetEnvironmentLightingRequest struct {
+	BaseToolRequest
 	LightingType string    `json:"lighting_type"`
 	TopColor     []float64 `json:"top_color,omitempty"`
 	BottomColor  []float64 `json:"bottom_color,omitempty"`
 	Emission     []float64 `json:"emission,omitempty"`
 }
 
-type CreateLightOperation struct {
-	BaseOperation
+type CreateLightRequest struct {
+	BaseToolRequest
 	Light LightRequest `json:"light"`
 }
 
-type UpdateLightOperation struct {
-	BaseOperation
+type UpdateLightRequest struct {
+	BaseToolRequest
 	Updates map[string]interface{} `json:"updates"`
 	Before  *LightRequest          `json:"before,omitempty"` // Populated by agent after execution
 	After   *LightRequest          `json:"after,omitempty"`  // Populated by agent after execution
 }
 
-type RemoveLightOperation struct {
-	BaseOperation
+type RemoveLightRequest struct {
+	BaseToolRequest
 	RemovedLight *LightRequest `json:"removed_light,omitempty"` // Populated by agent after execution
 }
 
-type SetCameraOperation struct {
-	BaseOperation
+type SetCameraRequest struct {
+	BaseToolRequest
 	Camera CameraInfo `json:"camera"`
 }
 
@@ -307,109 +307,111 @@ func setCameraToolDeclaration() *genai.FunctionDeclaration {
 	}
 }
 
-// New parsing functions that create ToolOperation objects
+// ------------------------------------------------------------
+// Parsing functions - convert LLM function calls to requests
+// ------------------------------------------------------------
 
-// parseToolOperationFromFunctionCall creates a ToolOperation from any function call
-func parseToolOperationFromFunctionCall(call *genai.FunctionCall) ToolOperation {
+// parseToolRequestFromFunctionCall creates a ToolRequest from any function call
+func parseToolRequestFromFunctionCall(call *genai.FunctionCall) ToolRequest {
 	switch call.Name {
 	case "create_shape":
-		return parseCreateShapeOperation(call)
+		return parseCreateShapeRequest(call)
 	case "update_shape":
-		return parseUpdateShapeOperation(call)
+		return parseUpdateShapeRequest(call)
 	case "remove_shape":
-		return parseRemoveShapeOperation(call)
+		return parseRemoveShapeRequest(call)
 	case "create_light":
-		return parseCreateLightOperation(call)
+		return parseCreateLightRequest(call)
 	case "update_light":
-		return parseUpdateLightOperation(call)
+		return parseUpdateLightRequest(call)
 	case "remove_light":
-		return parseRemoveLightOperation(call)
+		return parseRemoveLightRequest(call)
 	case "set_environment_lighting":
-		return parseSetEnvironmentLightingOperation(call)
+		return parseSetEnvironmentLightingRequest(call)
 	case "set_camera":
-		return parseSetCameraOperation(call)
+		return parseSetCameraRequest(call)
 	default:
 		return nil
 	}
 }
 
-// parseCreateShapeOperation creates a CreateShapeOperation from a create_shape function call
-func parseCreateShapeOperation(call *genai.FunctionCall) *CreateShapeOperation {
+// parseCreateShapeRequest creates a CreateShapeRequest from a create_shape function call
+func parseCreateShapeRequest(call *genai.FunctionCall) *CreateShapeRequest {
 	shape := extractShapeRequest(call.Args)
 
-	return &CreateShapeOperation{
-		BaseOperation: BaseOperation{ToolType: "create_shape", Id: shape.ID},
-		Shape:         shape,
+	return &CreateShapeRequest{
+		BaseToolRequest: BaseToolRequest{ToolType: "create_shape", Id: shape.ID},
+		Shape:           shape,
 	}
 }
 
-// parseUpdateShapeOperation creates an UpdateShapeOperation from an update_shape function call
-func parseUpdateShapeOperation(call *genai.FunctionCall) *UpdateShapeOperation {
+// parseUpdateShapeRequest creates an UpdateShapeRequest from an update_shape function call
+func parseUpdateShapeRequest(call *genai.FunctionCall) *UpdateShapeRequest {
 	id, _ := extractStringArg(call.Args, "id")
 	updates, _ := extractMapArg(call.Args, "updates")
 
-	return &UpdateShapeOperation{
-		BaseOperation: BaseOperation{ToolType: "update_shape", Id: id},
-		Updates:       updates,
+	return &UpdateShapeRequest{
+		BaseToolRequest: BaseToolRequest{ToolType: "update_shape", Id: id},
+		Updates:         updates,
 	}
 }
 
-// parseRemoveShapeOperation creates a RemoveShapeOperation from a remove_shape function call
-func parseRemoveShapeOperation(call *genai.FunctionCall) *RemoveShapeOperation {
+// parseRemoveShapeRequest creates a RemoveShapeRequest from a remove_shape function call
+func parseRemoveShapeRequest(call *genai.FunctionCall) *RemoveShapeRequest {
 	id, _ := extractStringArg(call.Args, "id")
 
-	return &RemoveShapeOperation{
-		BaseOperation: BaseOperation{ToolType: "remove_shape", Id: id},
+	return &RemoveShapeRequest{
+		BaseToolRequest: BaseToolRequest{ToolType: "remove_shape", Id: id},
 	}
 }
 
-// parseSetEnvironmentLightingOperation creates a SetEnvironmentLightingOperation from a set_environment_lighting function call
-func parseSetEnvironmentLightingOperation(call *genai.FunctionCall) *SetEnvironmentLightingOperation {
+// parseSetEnvironmentLightingRequest creates a SetEnvironmentLightingRequest from a set_environment_lighting function call
+func parseSetEnvironmentLightingRequest(call *genai.FunctionCall) *SetEnvironmentLightingRequest {
 	lightingType, _ := extractStringArg(call.Args, "type")
 	topColor, _ := extractFloatArrayArg(call.Args, "top_color")
 	bottomColor, _ := extractFloatArrayArg(call.Args, "bottom_color")
 	emission, _ := extractFloatArrayArg(call.Args, "emission")
 
-	return &SetEnvironmentLightingOperation{
-		BaseOperation: BaseOperation{ToolType: "set_environment_lighting"},
-		LightingType:  lightingType,
-		TopColor:      topColor,
-		BottomColor:   bottomColor,
-		Emission:      emission,
+	return &SetEnvironmentLightingRequest{
+		BaseToolRequest: BaseToolRequest{ToolType: "set_environment_lighting"},
+		LightingType:    lightingType,
+		TopColor:        topColor,
+		BottomColor:     bottomColor,
+		Emission:        emission,
 	}
 }
 
-// parseCreateLightOperation creates a CreateLightOperation from a create_light function call
-func parseCreateLightOperation(call *genai.FunctionCall) *CreateLightOperation {
+// parseCreateLightRequest creates a CreateLightRequest from a create_light function call
+func parseCreateLightRequest(call *genai.FunctionCall) *CreateLightRequest {
 	light := extractLightRequest(call.Args)
 
-	return &CreateLightOperation{
-		BaseOperation: BaseOperation{ToolType: "create_light"},
-		Light:         light,
+	return &CreateLightRequest{
+		BaseToolRequest: BaseToolRequest{ToolType: "create_light"},
+		Light:           light,
 	}
 }
 
-// parseUpdateLightOperation creates an UpdateLightOperation from an update_light function call
-func parseUpdateLightOperation(call *genai.FunctionCall) *UpdateLightOperation {
+// parseUpdateLightRequest creates an UpdateLightRequest from an update_light function call
+func parseUpdateLightRequest(call *genai.FunctionCall) *UpdateLightRequest {
 	id, _ := extractStringArg(call.Args, "id")
 	updates, _ := extractMapArg(call.Args, "updates")
 
-	return &UpdateLightOperation{
-		BaseOperation: BaseOperation{ToolType: "update_light", Id: id},
-		Updates:       updates,
+	return &UpdateLightRequest{
+		BaseToolRequest: BaseToolRequest{ToolType: "update_light", Id: id},
+		Updates:         updates,
 	}
 }
 
-// parseRemoveLightOperation creates a RemoveLightOperation from a remove_light function call
-func parseRemoveLightOperation(call *genai.FunctionCall) *RemoveLightOperation {
+// parseRemoveLightRequest creates a RemoveLightRequest from a remove_light function call
+func parseRemoveLightRequest(call *genai.FunctionCall) *RemoveLightRequest {
 	id, _ := extractStringArg(call.Args, "id")
 
-	return &RemoveLightOperation{
-		BaseOperation: BaseOperation{ToolType: "remove_light", Id: id},
+	return &RemoveLightRequest{
+		BaseToolRequest: BaseToolRequest{ToolType: "remove_light", Id: id},
 	}
 }
 
-func parseSetCameraOperation(call *genai.FunctionCall) *SetCameraOperation {
+func parseSetCameraRequest(call *genai.FunctionCall) *SetCameraRequest {
 	center, _ := extractFloatArrayArg(call.Args, "center")
 	lookAt, _ := extractFloatArrayArg(call.Args, "look_at")
 	vfov, hasVFov := extractFloatArg(call.Args, "vfov")
@@ -421,8 +423,8 @@ func parseSetCameraOperation(call *genai.FunctionCall) *SetCameraOperation {
 	}
 	// aperture defaults to 0.0 (already handled by zero value)
 
-	return &SetCameraOperation{
-		BaseOperation: BaseOperation{ToolType: "set_camera"},
+	return &SetCameraRequest{
+		BaseToolRequest: BaseToolRequest{ToolType: "set_camera"},
 		Camera: CameraInfo{
 			Center:   center,
 			LookAt:   lookAt,
