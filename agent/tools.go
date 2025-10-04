@@ -26,6 +26,12 @@ type LightRequest struct {
 // Tool request types - structured requests for execution
 // ------------------------------------------------------------
 
+// ToolRequest interface - describes what the LLM wanted to do
+type ToolRequest interface {
+	ToolName() string // "create_shape", "update_shape", "remove_shape"
+	Target() string   // Shape ID being operated on (if applicable), empty otherwise
+}
+
 type BaseToolRequest struct {
 	ToolType string `json:"tool_name"`    // For JSON serialization
 	Id       string `json:"id,omitempty"` // Optional target ID (shape/light ID, or special like "camera")
