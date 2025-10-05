@@ -76,7 +76,7 @@ type SceneState struct {
 ```json
 {
   "id": "ceiling_light",
-  "type": "area_disc_light",
+  "type": "disc_spot_light",
   "properties": {
     "center": [x, y, z],             // Center position
     "normal": [x, y, z],             // Surface normal direction
@@ -153,7 +153,7 @@ Following the established shape tool pattern, lights use separate tools for each
   "description": "Create a new light in the scene with a unique ID",
   "parameters": {
     "id": "string // Unique identifier for the light",
-    "type": "point_spot_light|area_quad_light|area_disc_light|area_sphere_light|area_disc_spot_light|infinite_uniform_light|infinite_gradient_light",
+    "type": "point_spot_light|area_quad_light|disc_spot_light|area_sphere_light|area_disc_spot_light|infinite_uniform_light|infinite_gradient_light",
     "properties": "object // Type-specific properties"
   }
 }
@@ -234,13 +234,13 @@ Following the established shape tool pattern, lights use separate tools for each
 ```
 - infinite_gradient_light: Sky with sun/atmosphere
 - area_sphere_light: Sun as distant bright sphere
-- area_disc_light: Moon or artificial light sources
+- disc_spot_light: Moon or artificial light sources
 ```
 
 #### **Architectural Visualization**
 ```
 - area_quad_light: Ceiling panels, window openings
-- area_disc_light: Recessed ceiling lights
+- disc_spot_light: Recessed ceiling lights
 - infinite_uniform_light: Even ambient lighting
 ```
 
@@ -253,7 +253,7 @@ Following the established shape tool pattern, lights use separate tools for each
   "name": "create_light",
   "parameters": {
     "id": "ceiling_light_01",
-    "type": "area_disc_light",
+    "type": "disc_spot_light",
     "properties": {
       "center": [0, 3, 0],
       "normal": [0, -1, 0],

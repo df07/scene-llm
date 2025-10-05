@@ -544,7 +544,7 @@ func TestValidateLightProperties(t *testing.T) {
 			name: "valid area disc light",
 			light: LightRequest{
 				ID:   "test_disc",
-				Type: "area_disc_light",
+				Type: "disc_spot_light",
 				Properties: map[string]interface{}{
 					"center":   []interface{}{0.0, 3.0, 0.0},
 					"normal":   []interface{}{0.0, -1.0, 0.0},
@@ -760,10 +760,10 @@ func TestSceneConversionWithPositionedLights(t *testing.T) {
 		},
 		{
 			name:      "area disc light",
-			lightType: "area_disc_light",
+			lightType: "disc_spot_light",
 			light: LightRequest{
 				ID:   "test_disc",
-				Type: "area_disc_light",
+				Type: "disc_spot_light",
 				Properties: map[string]interface{}{
 					"center":   []interface{}{0.0, 3.0, 0.0},
 					"normal":   []interface{}{0.0, -1.0, 0.0},

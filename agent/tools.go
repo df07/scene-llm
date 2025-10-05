@@ -186,12 +186,12 @@ func createLightToolDeclaration() *genai.FunctionDeclaration {
 				},
 				"type": {
 					Type:        genai.TypeString,
-					Enum:        []string{"point_spot_light", "area_quad_light", "area_disc_light", "area_sphere_light", "area_disc_spot_light"},
+					Enum:        []string{"point_spot_light", "area_quad_light", "disc_spot_light", "area_sphere_light", "area_disc_spot_light"},
 					Description: "The type of light to create",
 				},
 				"properties": {
 					Type:        genai.TypeObject,
-					Description: "Light-specific properties. For point_spot_light: {center: [x,y,z], emission: [r,g,b], direction: [x,y,z] (optional), cutoff_angle: degrees (optional), falloff_exponent: number (optional)}. For area_quad_light: {corner: [x,y,z], u: [x,y,z], v: [x,y,z], emission: [r,g,b]}. For area_disc_light: {center: [x,y,z], normal: [x,y,z], radius: number, emission: [r,g,b]}. For area_sphere_light: {center: [x,y,z], radius: number, emission: [r,g,b]}. For area_disc_spot_light: {center: [x,y,z], normal: [x,y,z], radius: number, emission: [r,g,b], cutoff_angle: degrees, falloff_exponent: number}",
+					Description: "Light-specific properties. For point_spot_light: {center: [x,y,z], emission: [r,g,b], direction: [x,y,z] (optional), cutoff_angle: degrees (optional), falloff_exponent: number (optional)}. For area_quad_light: {corner: [x,y,z], u: [x,y,z], v: [x,y,z], emission: [r,g,b]}. For disc_spot_light: {center: [x,y,z], normal: [x,y,z], radius: number, emission: [r,g,b]}. For area_sphere_light: {center: [x,y,z], radius: number, emission: [r,g,b]}. For area_disc_spot_light: {center: [x,y,z], normal: [x,y,z], radius: number, emission: [r,g,b], cutoff_angle: degrees, falloff_exponent: number}",
 				},
 			},
 			Required: []string{"id", "type", "properties"},

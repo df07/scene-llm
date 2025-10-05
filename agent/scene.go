@@ -461,18 +461,18 @@ func validateLightProperties(light LightRequest) error {
 			return err
 		}
 
-	case "area_disc_light":
+	case "disc_spot_light":
 		// Required: center, normal, radius, emission
-		if err := validateRequiredProperty(light.Properties, "center", "area_disc_light", light.ID); err != nil {
+		if err := validateRequiredProperty(light.Properties, "center", "disc_spot_light", light.ID); err != nil {
 			return err
 		}
-		if err := validateRequiredProperty(light.Properties, "normal", "area_disc_light", light.ID); err != nil {
+		if err := validateRequiredProperty(light.Properties, "normal", "disc_spot_light", light.ID); err != nil {
 			return err
 		}
-		if err := validateRequiredProperty(light.Properties, "radius", "area_disc_light", light.ID); err != nil {
+		if err := validateRequiredProperty(light.Properties, "radius", "disc_spot_light", light.ID); err != nil {
 			return err
 		}
-		if err := validateRequiredProperty(light.Properties, "emission", "area_disc_light", light.ID); err != nil {
+		if err := validateRequiredProperty(light.Properties, "emission", "disc_spot_light", light.ID); err != nil {
 			return err
 		}
 
@@ -487,10 +487,10 @@ func validateLightProperties(light LightRequest) error {
 		// Validate radius is a positive number
 		if radius, ok := extractFloat(light.Properties, "radius"); ok {
 			if radius <= 0 {
-				return fmt.Errorf("area_disc_light '%s' radius must be positive", light.ID)
+				return fmt.Errorf("disc_spot_light '%s' radius must be positive", light.ID)
 			}
 		} else {
-			return fmt.Errorf("area_disc_light '%s' radius must be a number", light.ID)
+			return fmt.Errorf("disc_spot_light '%s' radius must be a number", light.ID)
 		}
 
 		// Validate emission is array of 3 positive numbers
@@ -1168,24 +1168,24 @@ func (sm *SceneManager) addLightToScene(raytracerScene *scene.Scene, lightReq Li
 			core.NewVec3(emission[0], emission[1], emission[2]),
 		)
 
-	case "area_disc_light":
+	case "disc_spot_light":
 		// For now, we'll create a disc light using spot light with wide angle
 		// Extract required properties
 		center, ok := extractFloatArray(lightReq.Properties, "center", 3)
 		if !ok {
-			return fmt.Errorf("area_disc_light requires center property")
+			return fmt.Errorf("disc_spot_light requires center property")
 		}
 		normal, ok := extractFloatArray(lightReq.Properties, "normal", 3)
 		if !ok {
-			return fmt.Errorf("area_disc_light requires normal property")
+			return fmt.Errorf("disc_spot_light requires normal property")
 		}
 		radius, ok := extractFloat(lightReq.Properties, "radius")
 		if !ok {
-			return fmt.Errorf("area_disc_light requires radius property")
+			return fmt.Errorf("disc_spot_light requires radius property")
 		}
 		emission, ok := extractFloatArray(lightReq.Properties, "emission", 3)
 		if !ok {
-			return fmt.Errorf("area_disc_light requires emission property")
+			return fmt.Errorf("disc_spot_light requires emission property")
 		}
 
 		// Calculate target point from center and normal
