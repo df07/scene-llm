@@ -307,6 +307,7 @@ func (a *Agent) addSceneContext(conversation []*genai.Content, sceneContext stri
 
 AVAILABLE TOOLS:
 You have access to tools for creating, updating, and removing shapes and lights. Each tool call will return a JSON result showing you what happened.
+You can make multiple tool calls in a single response.
 
 WORKFLOW:
 1. Explain to the user what you're doing as you work
