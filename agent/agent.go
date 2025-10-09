@@ -133,7 +133,7 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Conten
 					resultMap["result"] = toolResult.Result
 				} else {
 					resultMap["success"] = false
-					resultMap["error"] = toolResult.Error
+					resultMap["errors"] = toolResult.Errors
 				}
 
 				// Create function response for conversation history
@@ -181,7 +181,7 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Conten
 type ToolResult struct {
 	Success bool        `json:"success"`
 	Result  interface{} `json:"result,omitempty"`
-	Error   string      `json:"error,omitempty"`
+	Errors  []string    `json:"errors,omitempty"`
 }
 
 // executeToolRequests executes a tool operation and returns structured result
@@ -285,7 +285,7 @@ func (a *Agent) executeToolRequests(operation ToolRequest) ToolResult {
 	if success {
 		return ToolResult{Success: true, Result: result}
 	}
-	return ToolResult{Success: false, Error: errorMsg}
+	return ToolResult{Success: false, Errors: []string{errorMsg}}
 }
 
 // addSceneContext prepends scene context to the latest user message
