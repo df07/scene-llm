@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 	"sync"
+
+	"github.com/df07/scene-llm/agent"
 )
 
 // Server handles web requests for the scene LLM
@@ -34,6 +36,15 @@ func (s *Server) Start() error {
 	http.HandleFunc("/api/health", s.handleHealth)
 	http.HandleFunc("/api/chat", s.handleChat)
 	http.HandleFunc("/api/chat/stream", s.handleChatStream)
+
+	// Validate API key by attempting to create an agent
+	events := make(chan agent.AgentEvent, 10)
+	testAgent, err := agent.New(events)
+	if err != nil {
+		return err
+	}
+	testAgent.Close()
+	close(events)
 
 	// Start server
 	addr := fmt.Sprintf(":%d", s.port)
