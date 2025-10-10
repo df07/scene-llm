@@ -1816,3 +1816,105 @@ func TestSetCameraValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestSetCameraMultipleErrors(t *testing.T) {
+	sm := NewSceneManager()
+
+	// Create a camera with multiple validation errors
+	badCamera := CameraInfo{
+		Center:   []float64{1.0}, // Wrong length
+		LookAt:   nil,            // Missing
+		VFov:     200.0,          // Out of range
+		Aperture: -1.0,           // Negative
+	}
+
+	err := sm.SetCamera(badCamera)
+	if err == nil {
+		t.Fatal("Expected error for invalid camera, got none")
+	}
+
+	// Check if it's a ValidationErrors type
+	validationErrs, ok := err.(ValidationErrors)
+	if !ok {
+		t.Fatalf("Expected ValidationErrors type, got %T", err)
+	}
+
+	// Should have 4 errors
+	if len(validationErrs) != 4 {
+		t.Errorf("Expected 4 validation errors, got %d: %v", len(validationErrs), validationErrs)
+	}
+
+	// Verify the error message includes count
+	errMsg := err.Error()
+	if errMsg == "" {
+		t.Error("Error message should not be empty")
+	}
+	t.Logf("Error message: %s", errMsg)
+}
+
+func TestValidateShapeMultipleErrors(t *testing.T) {
+	sm := NewSceneManager()
+
+	// Create a sphere with multiple validation errors
+	badSphere := ShapeRequest{
+		ID:   "", // Empty ID
+		Type: "sphere",
+		Properties: map[string]interface{}{
+			"center": []interface{}{1.0}, // Wrong length
+			// Missing radius
+			"color": []interface{}{2.0, 0.5, 0.5}, // Color out of range
+		},
+	}
+
+	err := sm.AddShapes([]ShapeRequest{badSphere})
+	if err == nil {
+		t.Fatal("Expected error for invalid shape, got none")
+	}
+
+	// Check if it's a ValidationErrors type
+	validationErrs, ok := err.(ValidationErrors)
+	if !ok {
+		t.Fatalf("Expected ValidationErrors type, got %T", err)
+	}
+
+	// Should have at least 4 errors (empty ID, wrong center length, missing radius, color out of range)
+	if len(validationErrs) < 4 {
+		t.Errorf("Expected at least 4 validation errors, got %d: %v", len(validationErrs), validationErrs)
+	}
+
+	t.Logf("Error message: %s", err.Error())
+}
+
+func TestValidateLightMultipleErrors(t *testing.T) {
+	sm := NewSceneManager()
+
+	// Create a point_spot_light with multiple validation errors
+	badLight := LightRequest{
+		ID:   "", // Empty ID
+		Type: "point_spot_light",
+		Properties: map[string]interface{}{
+			"center": []interface{}{1.0, 2.0}, // Wrong length
+			// Missing emission
+			"cutoff_angle":     200.0, // Out of range
+			"falloff_exponent": -5.0,  // Negative
+		},
+	}
+
+	err := sm.AddLights([]LightRequest{badLight})
+	if err == nil {
+		t.Fatal("Expected error for invalid light, got none")
+	}
+
+	// Check if it's a ValidationErrors type
+	validationErrs, ok := err.(ValidationErrors)
+	if !ok {
+		t.Fatalf("Expected ValidationErrors type, got %T", err)
+	}
+
+	// Should have at least 5 errors (empty ID, wrong center length, missing emission, invalid cutoff_angle, negative falloff_exponent)
+	if len(validationErrs) < 5 {
+		t.Errorf("Expected at least 5 validation errors, got %d: %v", len(validationErrs), validationErrs)
+	}
+
+	t.Logf("Error message: %s", err.Error())
+}

@@ -274,9 +274,16 @@ func (a *Agent) executeToolRequests(operation ToolRequest) ToolResult {
 
 	// Emit ToolCallEvent (for UI display)
 	var errorMsg string
+	var errors []string
 	success := err == nil
 	if err != nil {
 		errorMsg = err.Error()
+		// Check if error is ValidationErrors to extract individual errors
+		if validationErrs, ok := err.(ValidationErrors); ok {
+			errors = []string(validationErrs)
+		} else {
+			errors = []string{errorMsg}
+		}
 	}
 
 	a.events <- NewToolCallEvent(operation, success, errorMsg, duration)
@@ -285,7 +292,7 @@ func (a *Agent) executeToolRequests(operation ToolRequest) ToolResult {
 	if success {
 		return ToolResult{Success: true, Result: result}
 	}
-	return ToolResult{Success: false, Errors: []string{errorMsg}}
+	return ToolResult{Success: false, Errors: errors}
 }
 
 // addSceneContext prepends scene context to the latest user message
