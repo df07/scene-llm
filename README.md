@@ -53,9 +53,6 @@ go test ./...
 
 # Run agent tests with mock LLM
 go test ./agent -v
-
-# Build CLI tool
-go build -o scene-llm main.go
 ```
 
 ## License
