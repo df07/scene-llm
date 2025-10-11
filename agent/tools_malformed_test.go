@@ -279,7 +279,7 @@ func TestMalformedLLMInput(t *testing.T) {
 				},
 			},
 			expectError: true,
-			errorMsg:    "camera center and look_at cannot be the same point",
+			errorMsg:    "cannot be the same point",
 		},
 		{
 			name: "set_camera with vfov out of range (too high)",
@@ -293,7 +293,7 @@ func TestMalformedLLMInput(t *testing.T) {
 				},
 			},
 			expectError: true,
-			errorMsg:    "vfov must be between 0 and 180 degrees",
+			errorMsg:    "vfov must be in range",
 		},
 		{
 			name: "set_camera with negative aperture",
@@ -307,7 +307,7 @@ func TestMalformedLLMInput(t *testing.T) {
 				},
 			},
 			expectError: true,
-			errorMsg:    "aperture must be >= 0",
+			errorMsg:    "aperture must be in range",
 		},
 		{
 			name: "create_light with empty ID",

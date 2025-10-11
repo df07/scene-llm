@@ -489,28 +489,6 @@ func extractFloatArrayArg(args map[string]interface{}, key string) ([]float64, b
 	return nil, false
 }
 
-func extractFloat3ArrayArg(args map[string]interface{}, key string) ([3]float64, bool) {
-	// Handle [3]float64 directly
-	if val, ok := args[key].([3]float64); ok {
-		return val, true
-	}
-
-	// Handle []interface{} (from JSON/function calls)
-	if val, ok := args[key].([]interface{}); ok && len(val) == 3 {
-		var result [3]float64
-		for i, v := range val {
-			if f, ok := v.(float64); ok {
-				result[i] = f
-			} else {
-				return [3]float64{}, false
-			}
-		}
-		return result, true
-	}
-
-	return [3]float64{}, false
-}
-
 func extractShapeRequest(args map[string]interface{}) ShapeRequest {
 	shape := ShapeRequest{}
 	shape.ID, _ = extractStringArg(args, "id")

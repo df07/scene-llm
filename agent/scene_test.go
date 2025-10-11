@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -1728,10 +1729,10 @@ func TestSetCameraValidation(t *testing.T) {
 	sm := NewSceneManager()
 
 	tests := []struct {
-		name        string
-		camera      CameraInfo
-		expectError bool
-		errorMsg    string
+		name         string
+		camera       CameraInfo
+		expectError  bool
+		errorPattern string
 	}{
 		{
 			name: "valid camera",
@@ -1751,8 +1752,8 @@ func TestSetCameraValidation(t *testing.T) {
 				VFov:     0.0,
 				Aperture: 0.0,
 			},
-			expectError: true,
-			errorMsg:    "vfov must be between 0 and 180 degrees",
+			expectError:  true,
+			errorPattern: `vfov.*range`,
 		},
 		{
 			name: "invalid vfov - too high",
@@ -1762,8 +1763,8 @@ func TestSetCameraValidation(t *testing.T) {
 				VFov:     180.0,
 				Aperture: 0.0,
 			},
-			expectError: true,
-			errorMsg:    "vfov must be between 0 and 180 degrees",
+			expectError:  true,
+			errorPattern: `vfov.*range`,
 		},
 		{
 			name: "invalid vfov - negative",
@@ -1773,8 +1774,8 @@ func TestSetCameraValidation(t *testing.T) {
 				VFov:     -10.0,
 				Aperture: 0.0,
 			},
-			expectError: true,
-			errorMsg:    "vfov must be between 0 and 180 degrees",
+			expectError:  true,
+			errorPattern: `vfov.*range`,
 		},
 		{
 			name: "invalid aperture - negative",
@@ -1784,8 +1785,8 @@ func TestSetCameraValidation(t *testing.T) {
 				VFov:     45.0,
 				Aperture: -0.5,
 			},
-			expectError: true,
-			errorMsg:    "aperture must be >= 0",
+			expectError:  true,
+			errorPattern: `aperture.*range`,
 		},
 		{
 			name: "wide angle camera",
@@ -1805,8 +1806,14 @@ func TestSetCameraValidation(t *testing.T) {
 			if tt.expectError {
 				if err == nil {
 					t.Errorf("Expected error but got none")
-				} else if !strings.Contains(err.Error(), tt.errorMsg) {
-					t.Errorf("Expected error containing '%s', got: %v", tt.errorMsg, err)
+				} else if tt.errorPattern != "" {
+					matched, regexErr := regexp.MatchString(tt.errorPattern, err.Error())
+					if regexErr != nil {
+						t.Fatalf("Invalid regex pattern '%s': %v", tt.errorPattern, regexErr)
+					}
+					if !matched {
+						t.Errorf("Expected error matching pattern '%s', got: %v", tt.errorPattern, err)
+					}
 				}
 			} else {
 				if err != nil {

@@ -951,43 +951,52 @@ func (ve ValidationErrors) Error() string {
 	return fmt.Sprintf("%d validation errors: %s", len(ve), strings.Join(ve, "; "))
 }
 
+// Camera validation helpers
+
+// validateVec3Required validates that a Vec3 ([]float64) is non-nil and has exactly 3 elements
+func validateVec3Required(errors *ValidationErrors, vec []float64, fieldName string) {
+	if vec == nil {
+		*errors = append(*errors, fmt.Sprintf("%s must be provided", fieldName))
+		return
+	}
+	if len(vec) != 3 {
+		*errors = append(*errors, fmt.Sprintf("%s must have exactly 3 values", fieldName))
+		return
+	}
+}
+
+// validateVec3NotEqual validates that two Vec3 arrays are not identical
+func validateVec3NotEqual(errors *ValidationErrors, vec1, vec2 []float64, name1, name2 string) {
+	if vec1 != nil && vec2 != nil && len(vec1) == 3 && len(vec2) == 3 {
+		if vec1[0] == vec2[0] && vec1[1] == vec2[1] && vec1[2] == vec2[2] {
+			*errors = append(*errors, fmt.Sprintf("%s and %s cannot be the same point", name1, name2))
+		}
+	}
+}
+
+// validateFloatRangeInclusive validates that a float is within an inclusive range [min, max]
+func validateFloatRangeInclusive(errors *ValidationErrors, value, min, max float64, fieldName string) {
+	if value < min || value > max {
+		*errors = append(*errors, fmt.Sprintf("%s must be in range [%.1f, %.1f]", fieldName, min, max))
+	}
+}
+
+// validateFloatRangeExclusive validates that a float is within an exclusive range (min < value < max)
+func validateFloatRangeExclusive(errors *ValidationErrors, value, min, max float64, fieldName string) {
+	if value <= min || value >= max {
+		*errors = append(*errors, fmt.Sprintf("%s must be in range (%.1f, %.1f)", fieldName, min, max))
+	}
+}
+
 // SetCamera updates the camera configuration
 func (sm *SceneManager) SetCamera(camera CameraInfo) error {
 	var errors ValidationErrors
 
-	// Validate center is provided and has correct length
-	if camera.Center == nil {
-		errors = append(errors, "camera center must be provided")
-	} else if len(camera.Center) != 3 {
-		errors = append(errors, "camera center must have exactly 3 values")
-	}
-
-	// Validate lookAt is provided and has correct length
-	if camera.LookAt == nil {
-		errors = append(errors, "camera look_at must be provided")
-	} else if len(camera.LookAt) != 3 {
-		errors = append(errors, "camera look_at must have exactly 3 values")
-	}
-
-	// Validate center and lookAt are different (only if both are valid)
-	if camera.Center != nil && camera.LookAt != nil &&
-		len(camera.Center) == 3 && len(camera.LookAt) == 3 {
-		if camera.Center[0] == camera.LookAt[0] &&
-			camera.Center[1] == camera.LookAt[1] &&
-			camera.Center[2] == camera.LookAt[2] {
-			errors = append(errors, "camera center and look_at cannot be the same point")
-		}
-	}
-
-	// Validate vfov is in reasonable range
-	if camera.VFov <= 0 || camera.VFov >= 180 {
-		errors = append(errors, "vfov must be between 0 and 180 degrees")
-	}
-
-	// Validate aperture is non-negative
-	if camera.Aperture < 0 {
-		errors = append(errors, "aperture must be >= 0")
-	}
+	validateVec3Required(&errors, camera.Center, "camera center")
+	validateVec3Required(&errors, camera.LookAt, "camera look_at")
+	validateVec3NotEqual(&errors, camera.Center, camera.LookAt, "camera center", "camera look_at")
+	validateFloatRangeExclusive(&errors, camera.VFov, 0, 180, "vfov")
+	validateFloatRangeInclusive(&errors, camera.Aperture, 0, 100, "aperture")
 
 	// Return all errors if any
 	if len(errors) > 0 {
