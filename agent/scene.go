@@ -3,7 +3,6 @@ package agent
 import (
 	"fmt"
 	"math"
-	"strings"
 
 	"github.com/df07/go-progressive-raytracer/pkg/core"
 	"github.com/df07/go-progressive-raytracer/pkg/geometry"
@@ -52,30 +51,6 @@ func extractFloat(properties map[string]interface{}, key string) (float64, bool)
 	return 0, false
 }
 
-// validateFloatArray validates that a property is a float array of specified length with optional range check
-func validateFloatArray(properties map[string]interface{}, key string, length int, minVal, maxVal *float64, shapeID string) error {
-	val, ok := properties[key].([]interface{})
-	if !ok {
-		return fmt.Errorf("%s '%s' %s must be an array", getShapeType(properties), shapeID, key)
-	}
-	if len(val) != length {
-		return fmt.Errorf("%s '%s' %s must have exactly %d values", getShapeType(properties), shapeID, key, length)
-	}
-	for i, v := range val {
-		f, ok := v.(float64)
-		if !ok {
-			return fmt.Errorf("%s '%s' %s[%d] must be a number", getShapeType(properties), shapeID, key, i)
-		}
-		if minVal != nil && f < *minVal {
-			return fmt.Errorf("%s '%s' %s[%d] must be >= %.1f", getShapeType(properties), shapeID, key, i, *minVal)
-		}
-		if maxVal != nil && f > *maxVal {
-			return fmt.Errorf("%s '%s' %s[%d] must be <= %.1f", getShapeType(properties), shapeID, key, i, *maxVal)
-		}
-	}
-	return nil
-}
-
 // extractString extracts a string value from properties
 func extractString(properties map[string]interface{}, key string) (string, bool) {
 	if val, ok := properties[key].(string); ok {
@@ -88,22 +63,6 @@ func extractString(properties map[string]interface{}, key string) (string, bool)
 func hasProperty(properties map[string]interface{}, key string) bool {
 	_, exists := properties[key]
 	return exists
-}
-
-// validateRequiredProperty validates that a required property exists
-func validateRequiredProperty(properties map[string]interface{}, key, shapeType, shapeID string) error {
-	if !hasProperty(properties, key) {
-		return fmt.Errorf("%s '%s' requires '%s' property", shapeType, shapeID, key)
-	}
-	return nil
-}
-
-// getShapeType extracts shape type from validation context (helper for error messages)
-func getShapeType(properties map[string]interface{}) string {
-	if typeVal, ok := properties["type"].(string); ok {
-		return typeVal
-	}
-	return "shape"
 }
 
 // extractMaterial extracts material specification from shape properties
@@ -235,118 +194,35 @@ func NewSceneManager() *SceneManager {
 // validateShapeProperties validates that a shape has the required properties for its type
 func validateShapeProperties(shape ShapeRequest) error {
 	var errors ValidationErrors
+	zero := 0.0
+	one := 1.0
 
-	if shape.ID == "" {
-		errors = append(errors, "shape ID cannot be empty")
-	}
-
-	if shape.Type == "" {
-		errors = append(errors, "shape type cannot be empty")
-	}
+	validateStringRequired(&errors, shape.ID, "shape ID")
+	validateStringRequired(&errors, shape.Type, "shape type")
 
 	if shape.Properties == nil {
 		errors = append(errors, "shape properties cannot be nil")
-		// Can't validate further without properties
-		if len(errors) > 0 {
-			return errors
-		}
+		return errors // Can't validate further without properties
 	}
 
 	switch shape.Type {
 	case "sphere":
-		// Validate required properties exist
-		if err := validateRequiredProperty(shape.Properties, "center", "sphere", shape.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateRequiredProperty(shape.Properties, "radius", "sphere", shape.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-
-		// Validate center is an array of 3 numbers
-		if err := validateFloatArray(shape.Properties, "center", 3, nil, nil, shape.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-
-		// Validate radius is a positive number
-		if radius, ok := extractFloat(shape.Properties, "radius"); ok {
-			if radius <= 0 {
-				errors = append(errors, fmt.Sprintf("sphere '%s' radius must be positive", shape.ID))
-			}
-		} else if hasProperty(shape.Properties, "radius") {
-			errors = append(errors, fmt.Sprintf("sphere '%s' radius must be a number", shape.ID))
-		}
+		validateVec3PropertyRequired(&errors, shape.Properties, "center", nil, nil, "sphere", shape.ID)
+		validatePositiveFloatRequired(&errors, shape.Properties, "radius", "sphere", shape.ID)
 
 	case "box":
-		// Validate required properties exist
-		if err := validateRequiredProperty(shape.Properties, "center", "box", shape.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateRequiredProperty(shape.Properties, "dimensions", "box", shape.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-
-		// Validate center is an array of 3 numbers
-		if err := validateFloatArray(shape.Properties, "center", 3, nil, nil, shape.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-
-		// Validate dimensions is an array of 3 positive numbers
-		zero := 0.0
-		if err := validateFloatArray(shape.Properties, "dimensions", 3, &zero, nil, shape.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
+		validateVec3PropertyRequired(&errors, shape.Properties, "center", nil, nil, "box", shape.ID)
+		validateVec3PropertyRequired(&errors, shape.Properties, "dimensions", &zero, nil, "box", shape.ID)
 
 	case "quad":
-		// Validate required properties exist
-		if err := validateRequiredProperty(shape.Properties, "corner", "quad", shape.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateRequiredProperty(shape.Properties, "u", "quad", shape.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateRequiredProperty(shape.Properties, "v", "quad", shape.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-
-		// Validate corner, u, and v are arrays of 3 numbers
-		if err := validateFloatArray(shape.Properties, "corner", 3, nil, nil, shape.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateFloatArray(shape.Properties, "u", 3, nil, nil, shape.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateFloatArray(shape.Properties, "v", 3, nil, nil, shape.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
+		validateVec3PropertyRequired(&errors, shape.Properties, "corner", nil, nil, "quad", shape.ID)
+		validateVec3PropertyRequired(&errors, shape.Properties, "u", nil, nil, "quad", shape.ID)
+		validateVec3PropertyRequired(&errors, shape.Properties, "v", nil, nil, "quad", shape.ID)
 
 	case "disc":
-		// Validate required properties exist
-		if err := validateRequiredProperty(shape.Properties, "center", "disc", shape.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateRequiredProperty(shape.Properties, "normal", "disc", shape.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateRequiredProperty(shape.Properties, "radius", "disc", shape.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-
-		// Validate center and normal are arrays of 3 numbers
-		if err := validateFloatArray(shape.Properties, "center", 3, nil, nil, shape.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateFloatArray(shape.Properties, "normal", 3, nil, nil, shape.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-
-		// Validate radius is a positive number
-		if radius, ok := extractFloat(shape.Properties, "radius"); ok {
-			if radius <= 0 {
-				errors = append(errors, fmt.Sprintf("disc '%s' radius must be positive", shape.ID))
-			}
-		} else if hasProperty(shape.Properties, "radius") {
-			errors = append(errors, fmt.Sprintf("disc '%s' radius must be a number", shape.ID))
-		}
+		validateVec3PropertyRequired(&errors, shape.Properties, "center", nil, nil, "disc", shape.ID)
+		validateVec3PropertyRequired(&errors, shape.Properties, "normal", nil, nil, "disc", shape.ID)
+		validatePositiveFloatRequired(&errors, shape.Properties, "radius", "disc", shape.ID)
 
 	case "":
 		// Already handled above
@@ -355,13 +231,7 @@ func validateShapeProperties(shape ShapeRequest) error {
 	}
 
 	// Validate color if present (optional property)
-	if hasProperty(shape.Properties, "color") {
-		zero := 0.0
-		one := 1.0
-		if err := validateFloatArray(shape.Properties, "color", 3, &zero, &one, shape.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-	}
+	validateVec3PropertyOptional(&errors, shape.Properties, "color", &zero, &one, "shape", shape.ID)
 
 	// Validate material if present (optional property)
 	if mat, ok := extractMaterial(shape.Properties); ok {
@@ -379,237 +249,53 @@ func validateShapeProperties(shape ShapeRequest) error {
 // validateLightProperties validates a light's structure and properties
 func validateLightProperties(light LightRequest) error {
 	var errors ValidationErrors
+	zero := 0.0
+	maxAngle := 180.0
 
-	// Validate basic fields
-	if light.ID == "" {
-		errors = append(errors, "light ID cannot be empty")
-	}
-	if light.Type == "" {
-		errors = append(errors, fmt.Sprintf("light type cannot be empty for light '%s'", light.ID))
-	}
+	validateStringRequired(&errors, light.ID, "light ID")
+	validateStringRequired(&errors, light.Type, "light type")
+
 	if light.Properties == nil {
 		errors = append(errors, fmt.Sprintf("light properties cannot be nil for light '%s'", light.ID))
-		// Can't validate further without properties
-		if len(errors) > 0 {
-			return errors
-		}
+		return errors // can't validate further without Properties
 	}
 
 	// Validate type-specific properties
 	switch light.Type {
 	case "point_spot_light":
-		// Required: center, emission
-		// Optional: direction, cutoff_angle, falloff_exponent
-		if err := validateRequiredProperty(light.Properties, "center", "point_spot_light", light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateRequiredProperty(light.Properties, "emission", "point_spot_light", light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-
-		// Validate center is array of 3 numbers
-		if err := validateFloatArray(light.Properties, "center", 3, nil, nil, light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-
-		// Validate emission is array of 3 positive numbers
-		zero := 0.0
-		if err := validateFloatArray(light.Properties, "emission", 3, &zero, nil, light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-
-		// Validate optional direction (if present)
-		if hasProperty(light.Properties, "direction") {
-			if err := validateFloatArray(light.Properties, "direction", 3, nil, nil, light.ID); err != nil {
-				errors = append(errors, err.Error())
-			}
-		}
-
-		// Validate optional cutoff_angle (if present)
-		if hasProperty(light.Properties, "cutoff_angle") {
-			if angle, ok := extractFloat(light.Properties, "cutoff_angle"); ok {
-				if angle <= 0 || angle > 180 {
-					errors = append(errors, fmt.Sprintf("point_spot_light '%s' cutoff_angle must be between 0 and 180 degrees", light.ID))
-				}
-			} else {
-				errors = append(errors, fmt.Sprintf("point_spot_light '%s' cutoff_angle must be a number", light.ID))
-			}
-		}
-
-		// Validate optional falloff_exponent (if present)
-		if hasProperty(light.Properties, "falloff_exponent") {
-			if exponent, ok := extractFloat(light.Properties, "falloff_exponent"); ok {
-				if exponent < 0 {
-					errors = append(errors, fmt.Sprintf("point_spot_light '%s' falloff_exponent must be >= 0", light.ID))
-				}
-			} else {
-				errors = append(errors, fmt.Sprintf("point_spot_light '%s' falloff_exponent must be a number", light.ID))
-			}
-		}
+		validateVec3PropertyRequired(&errors, light.Properties, "center", nil, nil, "point_spot_light", light.ID)
+		validateVec3PropertyRequired(&errors, light.Properties, "emission", &zero, nil, "point_spot_light", light.ID)
+		validateVec3PropertyOptional(&errors, light.Properties, "direction", nil, nil, "point_spot_light", light.ID)
+		validateFloatPropertyOptional(&errors, light.Properties, "cutoff_angle", &zero, &maxAngle, "point_spot_light", light.ID, "cutoff_angle must be between 0 and 180 degrees")
+		validateFloatPropertyOptional(&errors, light.Properties, "falloff_exponent", &zero, nil, "point_spot_light", light.ID, "")
 
 	case "area_quad_light":
-		// Required: corner, u, v, emission
-		if err := validateRequiredProperty(light.Properties, "corner", "area_quad_light", light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateRequiredProperty(light.Properties, "u", "area_quad_light", light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateRequiredProperty(light.Properties, "v", "area_quad_light", light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateRequiredProperty(light.Properties, "emission", "area_quad_light", light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-
-		// Validate all are arrays of 3 numbers
-		if err := validateFloatArray(light.Properties, "corner", 3, nil, nil, light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateFloatArray(light.Properties, "u", 3, nil, nil, light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateFloatArray(light.Properties, "v", 3, nil, nil, light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-
-		// Validate emission is array of 3 positive numbers
-		zero := 0.0
-		if err := validateFloatArray(light.Properties, "emission", 3, &zero, nil, light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
+		validateVec3PropertyRequired(&errors, light.Properties, "corner", nil, nil, "area_quad_light", light.ID)
+		validateVec3PropertyRequired(&errors, light.Properties, "u", nil, nil, "area_quad_light", light.ID)
+		validateVec3PropertyRequired(&errors, light.Properties, "v", nil, nil, "area_quad_light", light.ID)
+		validateVec3PropertyRequired(&errors, light.Properties, "emission", &zero, nil, "area_quad_light", light.ID)
 
 	case "disc_spot_light":
 		// Required: center, normal, radius, emission
-		if err := validateRequiredProperty(light.Properties, "center", "disc_spot_light", light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateRequiredProperty(light.Properties, "normal", "disc_spot_light", light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateRequiredProperty(light.Properties, "radius", "disc_spot_light", light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateRequiredProperty(light.Properties, "emission", "disc_spot_light", light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-
-		// Validate center and normal are arrays of 3 numbers
-		if err := validateFloatArray(light.Properties, "center", 3, nil, nil, light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateFloatArray(light.Properties, "normal", 3, nil, nil, light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-
-		// Validate radius is a positive number
-		if radius, ok := extractFloat(light.Properties, "radius"); ok {
-			if radius <= 0 {
-				errors = append(errors, fmt.Sprintf("disc_spot_light '%s' radius must be positive", light.ID))
-			}
-		} else if hasProperty(light.Properties, "radius") {
-			errors = append(errors, fmt.Sprintf("disc_spot_light '%s' radius must be a number", light.ID))
-		}
-
-		// Validate emission is array of 3 positive numbers
-		zero := 0.0
-		if err := validateFloatArray(light.Properties, "emission", 3, &zero, nil, light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
+		validateVec3PropertyRequired(&errors, light.Properties, "center", nil, nil, "disc_spot_light", light.ID)
+		validateVec3PropertyRequired(&errors, light.Properties, "normal", nil, nil, "disc_spot_light", light.ID)
+		validatePositiveFloatRequired(&errors, light.Properties, "radius", "disc_spot_light", light.ID)
+		validateVec3PropertyRequired(&errors, light.Properties, "emission", &zero, nil, "disc_spot_light", light.ID)
 
 	case "area_sphere_light":
 		// Required: center, radius, emission
-		if err := validateRequiredProperty(light.Properties, "center", "area_sphere_light", light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateRequiredProperty(light.Properties, "radius", "area_sphere_light", light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateRequiredProperty(light.Properties, "emission", "area_sphere_light", light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-
-		// Validate center is array of 3 numbers
-		if err := validateFloatArray(light.Properties, "center", 3, nil, nil, light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-
-		// Validate radius is a positive number
-		if radius, ok := extractFloat(light.Properties, "radius"); ok {
-			if radius <= 0 {
-				errors = append(errors, fmt.Sprintf("area_sphere_light '%s' radius must be positive", light.ID))
-			}
-		} else if hasProperty(light.Properties, "radius") {
-			errors = append(errors, fmt.Sprintf("area_sphere_light '%s' radius must be a number", light.ID))
-		}
-
-		// Validate emission is array of 3 positive numbers
-		zero := 0.0
-		if err := validateFloatArray(light.Properties, "emission", 3, &zero, nil, light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
+		validateVec3PropertyRequired(&errors, light.Properties, "center", nil, nil, "area_sphere_light", light.ID)
+		validatePositiveFloatRequired(&errors, light.Properties, "radius", "area_sphere_light", light.ID)
+		validateVec3PropertyRequired(&errors, light.Properties, "emission", &zero, nil, "area_sphere_light", light.ID)
 
 	case "area_disc_spot_light":
 		// Required: center, normal, radius, emission, cutoff_angle, falloff_exponent
-		if err := validateRequiredProperty(light.Properties, "center", "area_disc_spot_light", light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateRequiredProperty(light.Properties, "normal", "area_disc_spot_light", light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateRequiredProperty(light.Properties, "radius", "area_disc_spot_light", light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateRequiredProperty(light.Properties, "emission", "area_disc_spot_light", light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateRequiredProperty(light.Properties, "cutoff_angle", "area_disc_spot_light", light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateRequiredProperty(light.Properties, "falloff_exponent", "area_disc_spot_light", light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-
-		// Validate center and normal are arrays of 3 numbers
-		if err := validateFloatArray(light.Properties, "center", 3, nil, nil, light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-		if err := validateFloatArray(light.Properties, "normal", 3, nil, nil, light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-
-		// Validate radius is a positive number
-		if radius, ok := extractFloat(light.Properties, "radius"); ok {
-			if radius <= 0 {
-				errors = append(errors, fmt.Sprintf("area_disc_spot_light '%s' radius must be positive", light.ID))
-			}
-		} else if hasProperty(light.Properties, "radius") {
-			errors = append(errors, fmt.Sprintf("area_disc_spot_light '%s' radius must be a number", light.ID))
-		}
-
-		// Validate emission is array of 3 positive numbers
-		zero := 0.0
-		if err := validateFloatArray(light.Properties, "emission", 3, &zero, nil, light.ID); err != nil {
-			errors = append(errors, err.Error())
-		}
-
-		// Validate cutoff_angle
-		if angle, ok := extractFloat(light.Properties, "cutoff_angle"); ok {
-			if angle <= 0 || angle > 180 {
-				errors = append(errors, fmt.Sprintf("area_disc_spot_light '%s' cutoff_angle must be between 0 and 180 degrees", light.ID))
-			}
-		} else if hasProperty(light.Properties, "cutoff_angle") {
-			errors = append(errors, fmt.Sprintf("area_disc_spot_light '%s' cutoff_angle must be a number", light.ID))
-		}
-
-		// Validate falloff_exponent
-		if exponent, ok := extractFloat(light.Properties, "falloff_exponent"); ok {
-			if exponent < 0 {
-				errors = append(errors, fmt.Sprintf("area_disc_spot_light '%s' falloff_exponent must be >= 0", light.ID))
-			}
-		} else if hasProperty(light.Properties, "falloff_exponent") {
-			errors = append(errors, fmt.Sprintf("area_disc_spot_light '%s' falloff_exponent must be a number", light.ID))
-		}
+		validateVec3PropertyRequired(&errors, light.Properties, "center", nil, nil, "area_disc_spot_light", light.ID)
+		validateVec3PropertyRequired(&errors, light.Properties, "normal", nil, nil, "area_disc_spot_light", light.ID)
+		validatePositiveFloatRequired(&errors, light.Properties, "radius", "area_disc_spot_light", light.ID)
+		validateVec3PropertyRequired(&errors, light.Properties, "emission", &zero, nil, "area_disc_spot_light", light.ID)
+		validateFloatPropertyRequired(&errors, light.Properties, "cutoff_angle", &zero, &maxAngle, "area_disc_spot_light", light.ID, "cutoff_angle must be between 0 and 180 degrees")
+		validateFloatPropertyRequired(&errors, light.Properties, "falloff_exponent", &zero, nil, "area_disc_spot_light", light.ID, "")
 
 	case "":
 		// Already handled above
@@ -936,56 +622,6 @@ func (sm *SceneManager) RemoveLight(id string) error {
 	}
 
 	return fmt.Errorf("light with ID '%s' not found", id)
-}
-
-// ValidationErrors is a custom error type that holds multiple validation errors
-type ValidationErrors []string
-
-func (ve ValidationErrors) Error() string {
-	if len(ve) == 0 {
-		return ""
-	}
-	if len(ve) == 1 {
-		return ve[0]
-	}
-	return fmt.Sprintf("%d validation errors: %s", len(ve), strings.Join(ve, "; "))
-}
-
-// Camera validation helpers
-
-// validateVec3Required validates that a Vec3 ([]float64) is non-nil and has exactly 3 elements
-func validateVec3Required(errors *ValidationErrors, vec []float64, fieldName string) {
-	if vec == nil {
-		*errors = append(*errors, fmt.Sprintf("%s must be provided", fieldName))
-		return
-	}
-	if len(vec) != 3 {
-		*errors = append(*errors, fmt.Sprintf("%s must have exactly 3 values", fieldName))
-		return
-	}
-}
-
-// validateVec3NotEqual validates that two Vec3 arrays are not identical
-func validateVec3NotEqual(errors *ValidationErrors, vec1, vec2 []float64, name1, name2 string) {
-	if vec1 != nil && vec2 != nil && len(vec1) == 3 && len(vec2) == 3 {
-		if vec1[0] == vec2[0] && vec1[1] == vec2[1] && vec1[2] == vec2[2] {
-			*errors = append(*errors, fmt.Sprintf("%s and %s cannot be the same point", name1, name2))
-		}
-	}
-}
-
-// validateFloatRangeInclusive validates that a float is within an inclusive range [min, max]
-func validateFloatRangeInclusive(errors *ValidationErrors, value, min, max float64, fieldName string) {
-	if value < min || value > max {
-		*errors = append(*errors, fmt.Sprintf("%s must be in range [%.1f, %.1f]", fieldName, min, max))
-	}
-}
-
-// validateFloatRangeExclusive validates that a float is within an exclusive range (min < value < max)
-func validateFloatRangeExclusive(errors *ValidationErrors, value, min, max float64, fieldName string) {
-	if value <= min || value >= max {
-		*errors = append(*errors, fmt.Sprintf("%s must be in range (%.1f, %.1f)", fieldName, min, max))
-	}
 }
 
 // SetCamera updates the camera configuration
