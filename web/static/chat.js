@@ -133,8 +133,8 @@ class SceneLLMChat {
             // maintains the canonical conversation order
             this.addMessage('user', message);
 
-            // Show thinking indicator
-            this.addThinkingMessage();
+            // Show processing indicator
+            this.addProcessingMessage();
 
         } catch (error) {
             console.error('Failed to send message:', error);
@@ -154,11 +154,11 @@ class SceneLLMChat {
         console.log('SSE Event:', event);
 
         switch (event.type) {
-            case 'thinking':
-                this.updateThinkingMessage(event.data);
+            case 'processing':
+                this.updateProcessingMessage(event.data);
                 break;
             case 'llm_response':
-                this.removeThinkingMessage();
+                this.removeProcessingMessage();
                 this.addMessage('assistant', event.data);
                 break;
             case 'scene_update':
@@ -168,7 +168,7 @@ class SceneLLMChat {
                 this.handleFunctionCalls(event.data);
                 break;
             case 'error':
-                this.removeThinkingMessage();
+                this.removeProcessingMessage();
 
                 // Handle session not found - stop reconnection loop
                 if (event.data === 'Session not found') {
@@ -185,7 +185,7 @@ class SceneLLMChat {
                 }
                 break;
             case 'complete':
-                this.removeThinkingMessage();
+                this.removeProcessingMessage();
                 break;
             case 'ping':
                 // Keep-alive, ignore
@@ -225,34 +225,34 @@ class SceneLLMChat {
         this.scrollToBottom();
     }
 
-    addThinkingMessage() {
-        this.removeThinkingMessage(); // Remove any existing thinking message
+    addProcessingMessage() {
+        this.removeProcessingMessage(); // Remove any existing processing message
 
         const messageDiv = document.createElement('div');
-        messageDiv.className = 'message assistant thinking';
-        messageDiv.id = 'thinking-message';
+        messageDiv.className = 'message assistant processing';
+        messageDiv.id = 'processing-message';
 
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
-        contentDiv.textContent = '🤖 Thinking...';
+        contentDiv.textContent = '🤖 Processing...';
 
         messageDiv.appendChild(contentDiv);
         this.messagesContainer.appendChild(messageDiv);
         this.scrollToBottom();
     }
 
-    updateThinkingMessage(text) {
-        const thinkingMessage = document.getElementById('thinking-message');
-        if (thinkingMessage) {
-            const content = thinkingMessage.querySelector('.message-content');
+    updateProcessingMessage(text) {
+        const processingMessage = document.getElementById('processing-message');
+        if (processingMessage) {
+            const content = processingMessage.querySelector('.message-content');
             content.textContent = text;
         }
     }
 
-    removeThinkingMessage() {
-        const thinkingMessage = document.getElementById('thinking-message');
-        if (thinkingMessage) {
-            thinkingMessage.remove();
+    removeProcessingMessage() {
+        const processingMessage = document.getElementById('processing-message');
+        if (processingMessage) {
+            processingMessage.remove();
         }
     }
 

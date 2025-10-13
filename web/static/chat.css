@@ -167,14 +167,14 @@ body {
     font-style: normal;
 }
 
-.message.thinking .message-content {
+.message.processing .message-content {
     background-color: #e3f2fd;
     color: #1976d2;
     font-style: italic;
-    animation: thinking 1.5s infinite;
+    animation: processing 1.5s infinite;
 }
 
-@keyframes thinking {
+@keyframes processing {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.6; }
 }

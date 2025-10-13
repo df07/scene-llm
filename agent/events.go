@@ -12,11 +12,11 @@ type AgentEvent interface {
 }
 
 // Specific event types with type-safe data
-type ThinkingEvent struct {
+type ProcessingEvent struct {
 	Message string `json:"message"`
 }
 
-func (e ThinkingEvent) EventType() string { return "thinking" }
+func (e ProcessingEvent) EventType() string { return "processing" }
 
 type ResponseEvent struct {
 	Text string `json:"text"`
@@ -60,8 +60,8 @@ type CompleteEvent struct {
 func (e CompleteEvent) EventType() string { return "complete" }
 
 // Helper functions for creating events
-func NewThinkingEvent(message string) ThinkingEvent {
-	return ThinkingEvent{Message: message}
+func NewProcessingEvent(message string) ProcessingEvent {
+	return ProcessingEvent{Message: message}
 }
 
 func NewResponseEvent(text string) ResponseEvent {

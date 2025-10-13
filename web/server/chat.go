@@ -311,7 +311,7 @@ func (s *Server) processMessage(session *ChatSession, message string) {
 			// Handle tool call events with logging and broadcasting
 			s.handleToolCallEvent(session.ID, e)
 
-		case agent.ThinkingEvent:
+		case agent.ProcessingEvent:
 			s.broadcastToSession(session.ID, SSEChatEvent{Type: e.EventType(), Data: e.Message})
 		case agent.ErrorEvent:
 			s.broadcastToSession(session.ID, SSEChatEvent{Type: e.EventType(), Data: e.Message})

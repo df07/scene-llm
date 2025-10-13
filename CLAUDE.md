@@ -61,7 +61,7 @@ go test ./...
 2. **Tool Requests** (`CreateShapeRequest`, `UpdateShapeRequest`, etc.) - Structured requests ready for execution
    - All embed `BaseToolRequest` with `ToolType` and `Id` fields
    - Implement `ToolRequest` interface for polymorphic handling
-3. **Events** (`ToolCallEvent`, `ThinkingEvent`, etc.) - Streamed to frontend via WebSocket
+3. **Events** (`ToolCallEvent`, `ProcessingEvent`, etc.) - Streamed to frontend via WebSocket
 
 **Validation Strategy**:
 - **Parsing** (`tools.go`): Extract values, return zero values for missing/malformed data

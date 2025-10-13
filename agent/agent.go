@@ -58,8 +58,8 @@ func (a *Agent) SetEventsChannel(events chan<- AgentEvent) {
 func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Content) error {
 	const maxTurns = 10
 
-	// Send thinking event
-	a.events <- NewThinkingEvent("🤖 Processing your request...")
+	// Send processing event
+	a.events <- NewProcessingEvent("🤖 Processing your request...")
 
 	// Build scene context from our internal scene manager
 	sceneContext := a.sceneManager.BuildContext()

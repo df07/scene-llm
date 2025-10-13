@@ -219,7 +219,7 @@ Tool results are appended to conversation history after each execution.
 
 ### Streaming Improvements (Future)
 - Stream LLM text responses to user in real-time
-- Show "thinking..." indicator during tool execution
+- Show "processing..." indicator during tool execution
 - Progressive rendering during multi-turn loops
 
 ## Migration Notes
