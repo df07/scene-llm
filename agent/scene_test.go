@@ -1907,7 +1907,7 @@ func TestValidateLightMultipleErrors(t *testing.T) {
 		},
 	}
 
-	err := sm.AddLights([]LightRequest{badLight})
+	err := sm.AddTypedLights([]LightRequest{badLight})
 	if err == nil {
 		t.Fatal("Expected error for invalid light, got none")
 	}

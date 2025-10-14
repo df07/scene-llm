@@ -317,8 +317,9 @@ func TestMalformedLLMInput(t *testing.T) {
 					"id":   "",
 					"type": "point_spot_light",
 					"properties": map[string]interface{}{
-						"center":   []interface{}{0.0, 1.0, 0.0},
-						"emission": []interface{}{1.0, 1.0, 1.0},
+						"center":    []interface{}{0.0, 1.0, 0.0},
+						"direction": []interface{}{0.0, -1.0, 0.0},
+						"emission":  []interface{}{1.0, 1.0, 1.0},
 					},
 				},
 			},
@@ -333,8 +334,9 @@ func TestMalformedLLMInput(t *testing.T) {
 					"id":   "test_light",
 					"type": "point_spot_light",
 					"properties": map[string]interface{}{
-						"center":   []interface{}{0.0, 1.0, 0.0},
-						"emission": []interface{}{-1.0, 1.0, 1.0},
+						"center":    []interface{}{0.0, 1.0, 0.0},
+						"direction": []interface{}{0.0, -1.0, 0.0},
+						"emission":  []interface{}{-1.0, 1.0, 1.0},
 					},
 				},
 			},
@@ -363,7 +365,8 @@ func TestMalformedLLMInput(t *testing.T) {
 			case *SetCameraRequest:
 				err = sm.SetCamera(typedOp.Camera)
 			case *CreateLightRequest:
-				err = sm.AddLights([]LightRequest{typedOp.Light})
+				// AddTypedLights handles parsing, validation, and adding (matching agent.go behavior)
+				err = sm.AddTypedLights([]LightRequest{typedOp.Light})
 			default:
 				t.Fatalf("Unexpected operation type: %T", op)
 			}

@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"fmt"
+
 	"google.golang.org/genai"
 )
 
@@ -20,6 +22,72 @@ type LightRequest struct {
 	ID         string                 `json:"id"`
 	Type       string                 `json:"type"`
 	Properties map[string]interface{} `json:"properties"`
+}
+
+// ------------------------------------------------------------
+// Typed light request structs - parsed and validated from LLM
+// ------------------------------------------------------------
+
+// BaseLightRequest contains common fields for all light requests
+type BaseLightRequest struct {
+	ID   string `json:"id"`
+	Type string `json:"type"`
+}
+
+func (b BaseLightRequest) GetID() string   { return b.ID }
+func (b BaseLightRequest) GetType() string { return b.Type }
+
+// TypedLightRequest interface implemented by all typed light requests
+type TypedLightRequest interface {
+	GetID() string
+	GetType() string
+}
+
+// PointSpotLightRequest represents a point spot light with directional cone
+type PointSpotLightRequest struct {
+	BaseLightRequest
+	Center          [3]float64 `json:"center"`
+	Direction       [3]float64 `json:"direction"`
+	Emission        [3]float64 `json:"emission"`
+	CutoffAngle     *float64   `json:"cutoff_angle,omitempty"`     // Optional, defaults to 45.0
+	FalloffExponent *float64   `json:"falloff_exponent,omitempty"` // Optional, defaults to 5.0
+}
+
+// AreaQuadLightRequest represents a rectangular area light
+type AreaQuadLightRequest struct {
+	BaseLightRequest
+	Corner   [3]float64 `json:"corner"`
+	U        [3]float64 `json:"u"`
+	V        [3]float64 `json:"v"`
+	Emission [3]float64 `json:"emission"`
+}
+
+// DiscSpotLightRequest represents a disc-shaped area light (non-directional)
+type DiscSpotLightRequest struct {
+	BaseLightRequest
+	Center   [3]float64 `json:"center"`
+	Normal   [3]float64 `json:"normal"`
+	Radius   float64    `json:"radius"`
+	Emission [3]float64 `json:"emission"`
+}
+
+// AreaSphereLightRequest represents a spherical area light
+type AreaSphereLightRequest struct {
+	BaseLightRequest
+	Center   [3]float64 `json:"center"`
+	Radius   float64    `json:"radius"`
+	Emission [3]float64 `json:"emission"`
+}
+
+// AreaDiscSpotLightRequest represents a disc-shaped spot light with directional cone
+type AreaDiscSpotLightRequest struct {
+	BaseLightRequest
+	Center          [3]float64 `json:"center"`
+	Normal          [3]float64 `json:"normal"`
+	Radius          float64    `json:"radius"`
+	Emission        [3]float64 `json:"emission"`
+	CutoffAngle     *float64   `json:"cutoff_angle,omitempty"`     // Optional, defaults to 45.0
+	FalloffExponent *float64   `json:"falloff_exponent,omitempty"` // Optional, defaults to 5.0
 }
 
 // ------------------------------------------------------------
@@ -71,7 +139,7 @@ type SetEnvironmentLightingRequest struct {
 
 type CreateLightRequest struct {
 	BaseToolRequest
-	Light LightRequest `json:"light"`
+	Light LightRequest `json:"light"` // Raw light data from LLM
 }
 
 type UpdateLightRequest struct {
@@ -392,7 +460,7 @@ func parseCreateLightRequest(call *genai.FunctionCall) *CreateLightRequest {
 	light := extractLightRequest(call.Args)
 
 	return &CreateLightRequest{
-		BaseToolRequest: BaseToolRequest{ToolType: "create_light"},
+		BaseToolRequest: BaseToolRequest{ToolType: "create_light", Id: light.ID},
 		Light:           light,
 	}
 }
@@ -503,4 +571,170 @@ func extractLightRequest(args map[string]interface{}) LightRequest {
 	light.Type, _ = extractStringArg(args, "type")
 	light.Properties, _ = extractMapArg(args, "properties")
 	return light
+}
+
+// ------------------------------------------------------------
+// Typed light parsing and validation (NEW parallel code path)
+// ------------------------------------------------------------
+
+// parseTypedLightRequest parses a property bag into a typed light request with validation
+func parseTypedLightRequest(id, lightType string, properties map[string]interface{}) (TypedLightRequest, ValidationErrors) {
+	var errors ValidationErrors
+
+	// Validate basic fields
+	validateStringRequired(&errors, id, "light ID")
+	validateStringRequired(&errors, lightType, "light type")
+
+	if properties == nil {
+		errors = append(errors, "light properties cannot be nil")
+		return nil, errors
+	}
+
+	// Parse based on light type
+	switch lightType {
+	case "point_spot_light":
+		return parsePointSpotLightRequest(id, lightType, properties, &errors)
+	case "area_quad_light":
+		return parseAreaQuadLightRequest(id, lightType, properties, &errors)
+	case "disc_spot_light":
+		return parseDiscSpotLightRequest(id, lightType, properties, &errors)
+	case "area_sphere_light":
+		return parseAreaSphereLightRequest(id, lightType, properties, &errors)
+	case "area_disc_spot_light":
+		return parseAreaDiscSpotLightRequest(id, lightType, properties, &errors)
+	default:
+		errors = append(errors, fmt.Sprintf("unknown light type '%s'", lightType))
+		return nil, errors
+	}
+}
+
+func parsePointSpotLightRequest(id, lightType string, properties map[string]interface{}, errors *ValidationErrors) (TypedLightRequest, ValidationErrors) {
+	req := &PointSpotLightRequest{
+		BaseLightRequest: BaseLightRequest{ID: id, Type: lightType},
+	}
+
+	// Validate and extract required fields
+	req.Center = validateVec3PropertyRequired(errors, properties, "center", nil, nil, "light", id)
+	req.Direction = validateVec3PropertyRequired(errors, properties, "direction", nil, nil, "light", id)
+	req.Emission = validateVec3PropertyRequired(errors, properties, "emission", floatPtr(0.0), nil, "light", id)
+
+	// Extract optional fields
+	if hasProperty(properties, "cutoff_angle") {
+		val, ok := properties["cutoff_angle"].(float64)
+		if !ok {
+			*errors = append(*errors, fmt.Sprintf("light '%s' cutoff_angle must be a number", id))
+		} else {
+			validateFloatRangeInclusive(errors, val, 0.0, 180.0, fmt.Sprintf("light '%s' cutoff_angle", id))
+			req.CutoffAngle = &val
+		}
+	}
+
+	if hasProperty(properties, "falloff_exponent") {
+		val, ok := properties["falloff_exponent"].(float64)
+		if !ok {
+			*errors = append(*errors, fmt.Sprintf("light '%s' falloff_exponent must be a number", id))
+		} else {
+			validateFloatRangeInclusive(errors, val, 0.0, 1000.0, fmt.Sprintf("light '%s' falloff_exponent", id))
+			req.FalloffExponent = &val
+		}
+	}
+
+	if len(*errors) > 0 {
+		return nil, *errors
+	}
+	return req, nil
+}
+
+func parseAreaQuadLightRequest(id, lightType string, properties map[string]interface{}, errors *ValidationErrors) (TypedLightRequest, ValidationErrors) {
+	req := &AreaQuadLightRequest{
+		BaseLightRequest: BaseLightRequest{ID: id, Type: lightType},
+	}
+
+	// Validate and extract required fields
+	req.Corner = validateVec3PropertyRequired(errors, properties, "corner", nil, nil, "light", id)
+	req.U = validateVec3PropertyRequired(errors, properties, "u", nil, nil, "light", id)
+	req.V = validateVec3PropertyRequired(errors, properties, "v", nil, nil, "light", id)
+	req.Emission = validateVec3PropertyRequired(errors, properties, "emission", floatPtr(0.0), nil, "light", id)
+
+	if len(*errors) > 0 {
+		return nil, *errors
+	}
+	return req, nil
+}
+
+func parseDiscSpotLightRequest(id, lightType string, properties map[string]interface{}, errors *ValidationErrors) (TypedLightRequest, ValidationErrors) {
+	req := &DiscSpotLightRequest{
+		BaseLightRequest: BaseLightRequest{ID: id, Type: lightType},
+	}
+
+	// Validate and extract required fields
+	req.Center = validateVec3PropertyRequired(errors, properties, "center", nil, nil, "light", id)
+	req.Normal = validateVec3PropertyRequired(errors, properties, "normal", nil, nil, "light", id)
+	req.Radius = validatePositiveFloatRequired(errors, properties, "radius", "light", id)
+	req.Emission = validateVec3PropertyRequired(errors, properties, "emission", floatPtr(0.0), nil, "light", id)
+
+	if len(*errors) > 0 {
+		return nil, *errors
+	}
+	return req, nil
+}
+
+func parseAreaSphereLightRequest(id, lightType string, properties map[string]interface{}, errors *ValidationErrors) (TypedLightRequest, ValidationErrors) {
+	req := &AreaSphereLightRequest{
+		BaseLightRequest: BaseLightRequest{ID: id, Type: lightType},
+	}
+
+	// Validate and extract required fields
+	req.Center = validateVec3PropertyRequired(errors, properties, "center", nil, nil, "light", id)
+	req.Radius = validatePositiveFloatRequired(errors, properties, "radius", "light", id)
+	req.Emission = validateVec3PropertyRequired(errors, properties, "emission", floatPtr(0.0), nil, "light", id)
+
+	if len(*errors) > 0 {
+		return nil, *errors
+	}
+	return req, nil
+}
+
+func parseAreaDiscSpotLightRequest(id, lightType string, properties map[string]interface{}, errors *ValidationErrors) (TypedLightRequest, ValidationErrors) {
+	req := &AreaDiscSpotLightRequest{
+		BaseLightRequest: BaseLightRequest{ID: id, Type: lightType},
+	}
+
+	// Validate and extract required fields
+	req.Center = validateVec3PropertyRequired(errors, properties, "center", nil, nil, "light", id)
+	req.Normal = validateVec3PropertyRequired(errors, properties, "normal", nil, nil, "light", id)
+	req.Radius = validatePositiveFloatRequired(errors, properties, "radius", "light", id)
+	req.Emission = validateVec3PropertyRequired(errors, properties, "emission", floatPtr(0.0), nil, "light", id)
+
+	// Extract optional fields
+	if hasProperty(properties, "cutoff_angle") {
+		val, ok := properties["cutoff_angle"].(float64)
+		if !ok {
+			*errors = append(*errors, fmt.Sprintf("light '%s' cutoff_angle must be a number", id))
+		} else {
+			validateFloatRangeInclusive(errors, val, 0.0, 180.0, fmt.Sprintf("light '%s' cutoff_angle", id))
+			req.CutoffAngle = &val
+		}
+	}
+
+	if hasProperty(properties, "falloff_exponent") {
+		val, ok := properties["falloff_exponent"].(float64)
+		if !ok {
+			*errors = append(*errors, fmt.Sprintf("light '%s' falloff_exponent must be a number", id))
+		} else {
+			validateFloatRangeInclusive(errors, val, 0.0, 1000.0, fmt.Sprintf("light '%s' falloff_exponent", id))
+			req.FalloffExponent = &val
+		}
+	}
+
+	if len(*errors) > 0 {
+		return nil, *errors
+	}
+	return req, nil
+}
+
+// Helper functions for typed light parsing
+
+func floatPtr(f float64) *float64 {
+	return &f
 }

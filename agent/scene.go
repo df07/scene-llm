@@ -520,27 +520,37 @@ func (sm *SceneManager) RemoveShape(id string) error {
 	return fmt.Errorf("shape with ID '%s' not found", id)
 }
 
-// AddLights adds lights to the scene
-func (sm *SceneManager) AddLights(lights []LightRequest) error {
-	if len(lights) == 0 {
+// AddTypedLights validates and adds raw lights to the scene
+// It parses raw LightRequest into typed structs, validates them, and adds them to the scene
+func (sm *SceneManager) AddTypedLights(rawLights []LightRequest) error {
+	if len(rawLights) == 0 {
 		return nil
 	}
 
-	// Validate unique IDs and light properties
-	for _, newLight := range lights {
-		// Validate light properties
-		if err := validateLightProperties(newLight); err != nil {
-			return err
+	// Parse and validate all lights first (don't add any if validation fails)
+	typedLights := make([]TypedLightRequest, 0, len(rawLights))
+	for _, rawLight := range rawLights {
+		// Parse into typed request and validate
+		typedLight, validationErrs := parseTypedLightRequest(rawLight.ID, rawLight.Type, rawLight.Properties)
+		if len(validationErrs) > 0 {
+			return validationErrs
 		}
 
 		// Check for ID uniqueness
-		if sm.FindLight(newLight.ID) != nil {
-			return fmt.Errorf("light with ID '%s' already exists", newLight.ID)
+		if sm.FindLight(rawLight.ID) != nil {
+			return fmt.Errorf("light with ID '%s' already exists", rawLight.ID)
 		}
+
+		typedLights = append(typedLights, typedLight)
 	}
 
-	// Add all lights if validation passes
-	sm.state.Lights = append(sm.state.Lights, lights...)
+	// Convert typed lights back to LightRequest for storage
+	// TODO: Eventually we'll store typed lights directly once the migration is complete
+	for _, typedLight := range typedLights {
+		lightReq := convertTypedLightToLightRequest(typedLight)
+		sm.state.Lights = append(sm.state.Lights, lightReq)
+	}
+
 	return nil
 }
 
@@ -963,6 +973,64 @@ func (sm *SceneManager) addLightToScene(raytracerScene *scene.Scene, lightReq Li
 	}
 
 	return nil
+}
+
+// ------------------------------------------------------------
+// Typed light conversion helpers (NEW parallel code path)
+// ------------------------------------------------------------
+
+// convertTypedLightToLightRequest converts a typed light request to a LightRequest for storage
+func convertTypedLightToLightRequest(typedLight TypedLightRequest) LightRequest {
+	properties := make(map[string]interface{})
+
+	switch light := typedLight.(type) {
+	case *PointSpotLightRequest:
+		// Convert [3]float64 to []interface{} for storage
+		properties["center"] = []interface{}{light.Center[0], light.Center[1], light.Center[2]}
+		properties["direction"] = []interface{}{light.Direction[0], light.Direction[1], light.Direction[2]}
+		properties["emission"] = []interface{}{light.Emission[0], light.Emission[1], light.Emission[2]}
+		if light.CutoffAngle != nil {
+			properties["cutoff_angle"] = *light.CutoffAngle
+		}
+		if light.FalloffExponent != nil {
+			properties["falloff_exponent"] = *light.FalloffExponent
+		}
+
+	case *AreaQuadLightRequest:
+		properties["corner"] = []interface{}{light.Corner[0], light.Corner[1], light.Corner[2]}
+		properties["u"] = []interface{}{light.U[0], light.U[1], light.U[2]}
+		properties["v"] = []interface{}{light.V[0], light.V[1], light.V[2]}
+		properties["emission"] = []interface{}{light.Emission[0], light.Emission[1], light.Emission[2]}
+
+	case *DiscSpotLightRequest:
+		properties["center"] = []interface{}{light.Center[0], light.Center[1], light.Center[2]}
+		properties["normal"] = []interface{}{light.Normal[0], light.Normal[1], light.Normal[2]}
+		properties["radius"] = light.Radius
+		properties["emission"] = []interface{}{light.Emission[0], light.Emission[1], light.Emission[2]}
+
+	case *AreaSphereLightRequest:
+		properties["center"] = []interface{}{light.Center[0], light.Center[1], light.Center[2]}
+		properties["radius"] = light.Radius
+		properties["emission"] = []interface{}{light.Emission[0], light.Emission[1], light.Emission[2]}
+
+	case *AreaDiscSpotLightRequest:
+		properties["center"] = []interface{}{light.Center[0], light.Center[1], light.Center[2]}
+		properties["normal"] = []interface{}{light.Normal[0], light.Normal[1], light.Normal[2]}
+		properties["radius"] = light.Radius
+		properties["emission"] = []interface{}{light.Emission[0], light.Emission[1], light.Emission[2]}
+		if light.CutoffAngle != nil {
+			properties["cutoff_angle"] = *light.CutoffAngle
+		}
+		if light.FalloffExponent != nil {
+			properties["falloff_exponent"] = *light.FalloffExponent
+		}
+	}
+
+	return LightRequest{
+		ID:         typedLight.GetID(),
+		Type:       typedLight.GetType(),
+		Properties: properties,
+	}
 }
 
 // ToRaytracerScene converts the scene state to a raytracer scene

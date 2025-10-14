@@ -344,12 +344,13 @@ func TestAddLights(t *testing.T) {
 		ID:   "main_light",
 		Type: "point_spot_light",
 		Properties: map[string]interface{}{
-			"center":   []interface{}{0.0, 2.0, 0.0},
-			"emission": []interface{}{1.0, 1.0, 1.0},
+			"center":    []interface{}{0.0, 2.0, 0.0},
+			"direction": []interface{}{0.0, -1.0, 0.0},
+			"emission":  []interface{}{1.0, 1.0, 1.0},
 		},
 	}
 
-	err := sm.AddLights([]LightRequest{pointLight})
+	err := sm.AddTypedLights([]LightRequest{pointLight})
 	if err != nil {
 		t.Errorf("Failed to add valid point light: %v", err)
 	}
@@ -359,13 +360,13 @@ func TestAddLights(t *testing.T) {
 	}
 
 	// Test duplicate ID error
-	err = sm.AddLights([]LightRequest{pointLight})
+	err = sm.AddTypedLights([]LightRequest{pointLight})
 	if err == nil {
 		t.Error("Expected error for duplicate light ID")
 	}
 
 	// Test empty light list
-	err = sm.AddLights([]LightRequest{})
+	err = sm.AddTypedLights([]LightRequest{})
 	if err != nil {
 		t.Errorf("Empty light list should not error: %v", err)
 	}
@@ -385,7 +386,7 @@ func TestFindLight(t *testing.T) {
 		},
 	}
 
-	sm.AddLights([]LightRequest{testLight})
+	sm.AddTypedLights([]LightRequest{testLight})
 
 	// Test finding existing light
 	found := sm.FindLight("test_light")
@@ -410,11 +411,12 @@ func TestUpdateLight(t *testing.T) {
 		ID:   "test_light",
 		Type: "point_spot_light",
 		Properties: map[string]interface{}{
-			"center":   []interface{}{0.0, 0.0, 0.0},
-			"emission": []interface{}{1.0, 1.0, 1.0},
+			"center":    []interface{}{0.0, 0.0, 0.0},
+			"direction": []interface{}{0.0, -1.0, 0.0},
+			"emission":  []interface{}{1.0, 1.0, 1.0},
 		},
 	}
-	sm.AddLights([]LightRequest{testLight})
+	sm.AddTypedLights([]LightRequest{testLight})
 
 	// Test updating properties
 	updates := map[string]interface{}{
@@ -467,8 +469,9 @@ func TestRemoveLight(t *testing.T) {
 			ID:   "light1",
 			Type: "point_spot_light",
 			Properties: map[string]interface{}{
-				"center":   []interface{}{0.0, 0.0, 0.0},
-				"emission": []interface{}{1.0, 1.0, 1.0},
+				"center":    []interface{}{0.0, 0.0, 0.0},
+				"direction": []interface{}{0.0, -1.0, 0.0},
+				"emission":  []interface{}{1.0, 1.0, 1.0},
 			},
 		},
 		{
@@ -481,7 +484,7 @@ func TestRemoveLight(t *testing.T) {
 			},
 		},
 	}
-	sm.AddLights(lights)
+	sm.AddTypedLights(lights)
 
 	if len(sm.state.Lights) != 2 {
 		t.Errorf("Expected 2 lights, got %d", len(sm.state.Lights))
@@ -602,7 +605,20 @@ func TestValidateLightProperties(t *testing.T) {
 				Type: "point_spot_light",
 				Properties: map[string]interface{}{
 					"center": []interface{}{0.0, 0.0, 0.0},
-					// Missing emission
+					// Missing emission and direction
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name: "point_spot_light missing direction",
+			light: LightRequest{
+				ID:   "test_no_direction",
+				Type: "point_spot_light",
+				Properties: map[string]interface{}{
+					"center":   []interface{}{0.0, 0.0, 0.0},
+					"emission": []interface{}{1.0, 1.0, 1.0},
+					// Missing direction - should error with AddTypedLights
 				},
 			},
 			shouldError: true,
@@ -649,6 +665,20 @@ func TestValidateLightProperties(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Special case: "point_spot_light missing direction" tests AddTypedLights
+			// which has stricter validation than validateLightProperties
+			if tt.name == "point_spot_light missing direction" {
+				sm := NewSceneManager()
+				err := sm.AddTypedLights([]LightRequest{tt.light})
+				if tt.shouldError && err == nil {
+					t.Errorf("Expected error for %s, but got none", tt.name)
+				}
+				if !tt.shouldError && err != nil {
+					t.Errorf("Unexpected error for %s: %v", tt.name, err)
+				}
+				return
+			}
+
 			err := validateLightProperties(tt.light)
 			if tt.shouldError && err == nil {
 				t.Errorf("Expected error for %s, but got none", tt.name)
@@ -668,8 +698,9 @@ func TestLightToolParsing(t *testing.T) {
 			"id":   "test_light",
 			"type": "point_spot_light",
 			"properties": map[string]interface{}{
-				"center":   []interface{}{0.0, 2.0, 0.0},
-				"emission": []interface{}{1.0, 1.0, 1.0},
+				"center":    []interface{}{0.0, 2.0, 0.0},
+				"direction": []interface{}{0.0, -1.0, 0.0},
+				"emission":  []interface{}{1.0, 1.0, 1.0},
 			},
 		},
 	}
@@ -739,8 +770,9 @@ func TestSceneConversionWithPositionedLights(t *testing.T) {
 				ID:   "test_point",
 				Type: "point_spot_light",
 				Properties: map[string]interface{}{
-					"center":   []interface{}{0.0, 2.0, 0.0},
-					"emission": []interface{}{1.0, 1.0, 1.0},
+					"center":    []interface{}{0.0, 2.0, 0.0},
+					"direction": []interface{}{0.0, -1.0, 0.0},
+					"emission":  []interface{}{1.0, 1.0, 1.0},
 				},
 			},
 		},
@@ -808,7 +840,7 @@ func TestSceneConversionWithPositionedLights(t *testing.T) {
 			sm := NewSceneManager()
 
 			// Add the light
-			err := sm.AddLights([]LightRequest{tt.light})
+			err := sm.AddTypedLights([]LightRequest{tt.light})
 			if err != nil {
 				t.Fatalf("Failed to add %s: %v", tt.lightType, err)
 			}
