@@ -233,8 +233,7 @@ func (a *Agent) executeToolRequests(operation ToolRequest) ToolResult {
 			}
 		}
 	case *CreateLightRequest:
-		// AddTypedLights handles parsing, validation, and adding the light
-		err = a.sceneManager.AddTypedLights([]LightRequest{op.Light})
+		err = a.sceneManager.AddLights([]LightRequest{op.Light})
 		if err == nil {
 			result = op.Light
 		}

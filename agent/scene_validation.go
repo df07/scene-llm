@@ -57,29 +57,26 @@ func validateFloatRangeExclusive(errors *ValidationErrors, value, min, max float
 
 // Shape and light validation helpers (for property bags)
 
-// validateVec3PropertyRequired validates and extracts a required Vec3 property in a property bag
-// Returns the extracted [3]float64 value (will be zero if validation failed - check errors to know if valid)
-func validateVec3PropertyRequired(errors *ValidationErrors, properties map[string]interface{}, key string, minVal, maxVal *float64, objType, objID string) [3]float64 {
+// validateVec3PropertyRequired validates a required Vec3 property in a property bag
+func validateVec3PropertyRequired(errors *ValidationErrors, properties map[string]interface{}, key string, minVal, maxVal *float64, objType, objID string) {
 	val, ok := properties[key].([]interface{})
 	if !ok {
 		*errors = append(*errors, fmt.Sprintf("%s '%s' requires '%s' property", objType, objID, key))
-		return [3]float64{}
+		return
 	}
 	if len(val) != 3 {
 		*errors = append(*errors, fmt.Sprintf("%s '%s' %s must have exactly 3 values", objType, objID, key))
-		return [3]float64{}
+		return
 	}
 
-	// Convert []interface{} to [3]float64 and validate types
-	result := [3]float64{}
+	// Convert []interface{} to []float64 and validate types
 	fieldName := fmt.Sprintf("%s '%s' %s", objType, objID, key)
 	for i, v := range val {
 		f, ok := v.(float64)
 		if !ok {
 			*errors = append(*errors, fmt.Sprintf("%s[%d] must be a number", fieldName, i))
-			return [3]float64{}
+			return
 		}
-		result[i] = f
 		// Validate range if specified
 		if minVal != nil && f < *minVal {
 			*errors = append(*errors, fmt.Sprintf("%s[%d] must be >= %.1f", fieldName, i, *minVal))
@@ -88,7 +85,6 @@ func validateVec3PropertyRequired(errors *ValidationErrors, properties map[strin
 			*errors = append(*errors, fmt.Sprintf("%s[%d] must be <= %.1f", fieldName, i, *maxVal))
 		}
 	}
-	return result
 }
 
 // validateVec3PropertyOptional validates an optional Vec3 property in a property bag (only if present)
@@ -136,24 +132,22 @@ func validateFloatPropertyOptional(errors *ValidationErrors, properties map[stri
 	validateFloatPropertyRequired(errors, properties, key, minVal, maxVal, objType, objID, constraintErrMsg)
 }
 
-// validatePositiveFloatRequired validates and extracts a required positive float property (> 0)
-// Returns the extracted float64 value (will be zero if validation failed - check errors to know if valid)
-func validatePositiveFloatRequired(errors *ValidationErrors, properties map[string]interface{}, key string, objType, objID string) float64 {
+// validatePositiveFloatRequired validates a required positive float property (> 0)
+func validatePositiveFloatRequired(errors *ValidationErrors, properties map[string]interface{}, key string, objType, objID string) {
 	if !hasProperty(properties, key) {
 		*errors = append(*errors, fmt.Sprintf("%s '%s' requires '%s' property", objType, objID, key))
-		return 0
+		return
 	}
 
 	val, ok := properties[key].(float64)
 	if !ok {
 		*errors = append(*errors, fmt.Sprintf("%s '%s' %s must be a number", objType, objID, key))
-		return 0
+		return
 	}
 
 	if val <= 0 {
 		*errors = append(*errors, fmt.Sprintf("%s '%s' %s must be positive", objType, objID, key))
 	}
-	return val
 }
 
 // validateStringRequired validates that a string is non-empty
