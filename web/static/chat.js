@@ -5,9 +5,33 @@ class SceneLLMChat {
         this.isConnected = false;
         this.isProcessing = false;
 
+        this.initializeTheme();
         this.initializeElements();
         this.attachEventListeners();
         this.startNewSession();
+    }
+
+    initializeTheme() {
+        // Load saved theme or default to light
+        const savedTheme = localStorage.getItem('scene-llm-theme') || 'light';
+        this.setTheme(savedTheme);
+    }
+
+    setTheme(theme) {
+        // Update document theme
+        document.documentElement.setAttribute('data-theme', theme);
+
+        // Update theme toggle buttons
+        document.querySelectorAll('.theme-toggle').forEach(toggle => {
+            if (toggle.dataset.theme === theme) {
+                toggle.classList.add('active');
+            } else {
+                toggle.classList.remove('active');
+            }
+        });
+
+        // Save theme preference
+        localStorage.setItem('scene-llm-theme', theme);
     }
 
     initializeElements() {
@@ -25,6 +49,13 @@ class SceneLLMChat {
     attachEventListeners() {
         this.chatForm.addEventListener('submit', (e) => this.handleSubmit(e));
         this.clearChatButton.addEventListener('click', () => this.clearChat());
+
+        // Add theme toggle handlers
+        document.querySelectorAll('.theme-toggle').forEach(toggle => {
+            toggle.addEventListener('click', () => {
+                this.setTheme(toggle.dataset.theme);
+            });
+        });
 
         // Auto-resize input and enable send on Enter
         this.messageInput.addEventListener('keydown', (e) => {

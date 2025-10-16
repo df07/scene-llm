@@ -8,9 +8,16 @@
     <div class="chat-container">
         <div class="chat-header">
             <h1>🎨 Scene LLM Chat</h1>
-            <div class="connection-status" id="connectionStatus">
-                <span class="status-indicator" id="statusIndicator"></span>
-                <span id="statusText">Connecting...</span>
+            <div class="header-controls">
+                <!-- Theme Switcher -->
+                <div class="theme-switcher">
+                    <button class="theme-toggle active" data-theme="light" title="Light mode">☀</button>
+                    <button class="theme-toggle" data-theme="dark" title="Dark mode">☾</button>
+                </div>
+                <div class="connection-status" id="connectionStatus">
+                    <span class="status-indicator" id="statusIndicator"></span>
+                    <span id="statusText">Connecting...</span>
+                </div>
             </div>
         </div>
 
