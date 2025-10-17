@@ -184,7 +184,7 @@ func TestMalformedLLMInput(t *testing.T) {
 				},
 			},
 			expectError: true,
-			errorMsg:    "lambertian material requires 'albedo' property",
+			errorMsg:    "requires 'albedo' property",
 		},
 		{
 			name: "metal material with fuzz out of range",
@@ -205,7 +205,7 @@ func TestMalformedLLMInput(t *testing.T) {
 				},
 			},
 			expectError: true,
-			errorMsg:    "fuzz' must be in range [0.0,1.0]",
+			errorMsg:    "fuzz must be <=",
 		},
 		{
 			name: "dielectric with refractive_index too low",
@@ -225,7 +225,7 @@ func TestMalformedLLMInput(t *testing.T) {
 				},
 			},
 			expectError: true,
-			errorMsg:    "refractive_index' must be >= 1.0",
+			errorMsg:    "refractive_index must be >= 1.0",
 		},
 		{
 			name: "set_camera with missing center",

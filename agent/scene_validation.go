@@ -18,6 +18,152 @@ func (ve ValidationErrors) Error() string {
 	return fmt.Sprintf("%d validation errors: %s", len(ve), strings.Join(ve, "; "))
 }
 
+// validateShapeProperties validates that a shape has the required properties for its type
+func validateShapeProperties(shape ShapeRequest) error {
+	var errors ValidationErrors
+	zero := 0.0
+	one := 1.0
+
+	validateStringRequired(&errors, shape.ID, "shape ID")
+	validateStringRequired(&errors, shape.Type, "shape type")
+
+	if shape.Properties == nil {
+		errors = append(errors, "shape properties cannot be nil")
+		return errors // Can't validate further without properties
+	}
+
+	switch shape.Type {
+	case "sphere":
+		validateVec3PropertyRequired(&errors, shape.Properties, "center", nil, nil, "sphere", shape.ID)
+		validatePositiveFloatRequired(&errors, shape.Properties, "radius", "sphere", shape.ID)
+
+	case "box":
+		validateVec3PropertyRequired(&errors, shape.Properties, "center", nil, nil, "box", shape.ID)
+		validateVec3PropertyRequired(&errors, shape.Properties, "dimensions", &zero, nil, "box", shape.ID)
+
+	case "quad":
+		validateVec3PropertyRequired(&errors, shape.Properties, "corner", nil, nil, "quad", shape.ID)
+		validateVec3PropertyRequired(&errors, shape.Properties, "u", nil, nil, "quad", shape.ID)
+		validateVec3PropertyRequired(&errors, shape.Properties, "v", nil, nil, "quad", shape.ID)
+
+	case "disc":
+		validateVec3PropertyRequired(&errors, shape.Properties, "center", nil, nil, "disc", shape.ID)
+		validateVec3PropertyRequired(&errors, shape.Properties, "normal", nil, nil, "disc", shape.ID)
+		validatePositiveFloatRequired(&errors, shape.Properties, "radius", "disc", shape.ID)
+
+	case "":
+		// Already handled above
+	default:
+		errors = append(errors, fmt.Sprintf("unsupported shape type '%s' for shape '%s'", shape.Type, shape.ID))
+	}
+
+	// Validate color if present (optional property)
+	validateVec3PropertyOptional(&errors, shape.Properties, "color", &zero, &one, "shape", shape.ID)
+
+	// Validate material if present (optional property)
+	if mat, ok := extractMaterial(shape.Properties); ok {
+		validateMaterial(&errors, mat, shape.ID)
+	}
+
+	if len(errors) > 0 {
+		return errors
+	}
+	return nil
+}
+
+// validateLightProperties validates a light's structure and properties
+func validateLightProperties(light LightRequest) error {
+	var errors ValidationErrors
+	zero := 0.0
+	maxAngle := 180.0
+
+	validateStringRequired(&errors, light.ID, "light ID")
+	validateStringRequired(&errors, light.Type, "light type")
+
+	if light.Properties == nil {
+		errors = append(errors, fmt.Sprintf("light properties cannot be nil for light '%s'", light.ID))
+		return errors // can't validate further without Properties
+	}
+
+	// Validate type-specific properties
+	switch light.Type {
+	case "point_spot_light":
+		validateVec3PropertyRequired(&errors, light.Properties, "center", nil, nil, "point_spot_light", light.ID)
+		validateVec3PropertyRequired(&errors, light.Properties, "emission", &zero, nil, "point_spot_light", light.ID)
+		validateVec3PropertyOptional(&errors, light.Properties, "direction", nil, nil, "point_spot_light", light.ID)
+		validateFloatPropertyOptional(&errors, light.Properties, "cutoff_angle", &zero, &maxAngle, "point_spot_light", light.ID, "cutoff_angle must be between 0 and 180 degrees")
+		validateFloatPropertyOptional(&errors, light.Properties, "falloff_exponent", &zero, nil, "point_spot_light", light.ID, "")
+
+	case "area_quad_light":
+		validateVec3PropertyRequired(&errors, light.Properties, "corner", nil, nil, "area_quad_light", light.ID)
+		validateVec3PropertyRequired(&errors, light.Properties, "u", nil, nil, "area_quad_light", light.ID)
+		validateVec3PropertyRequired(&errors, light.Properties, "v", nil, nil, "area_quad_light", light.ID)
+		validateVec3PropertyRequired(&errors, light.Properties, "emission", &zero, nil, "area_quad_light", light.ID)
+
+	case "disc_spot_light":
+		// Required: center, normal, radius, emission
+		validateVec3PropertyRequired(&errors, light.Properties, "center", nil, nil, "disc_spot_light", light.ID)
+		validateVec3PropertyRequired(&errors, light.Properties, "normal", nil, nil, "disc_spot_light", light.ID)
+		validatePositiveFloatRequired(&errors, light.Properties, "radius", "disc_spot_light", light.ID)
+		validateVec3PropertyRequired(&errors, light.Properties, "emission", &zero, nil, "disc_spot_light", light.ID)
+
+	case "area_sphere_light":
+		// Required: center, radius, emission
+		validateVec3PropertyRequired(&errors, light.Properties, "center", nil, nil, "area_sphere_light", light.ID)
+		validatePositiveFloatRequired(&errors, light.Properties, "radius", "area_sphere_light", light.ID)
+		validateVec3PropertyRequired(&errors, light.Properties, "emission", &zero, nil, "area_sphere_light", light.ID)
+
+	case "area_disc_spot_light":
+		// Required: center, normal, radius, emission, cutoff_angle, falloff_exponent
+		validateVec3PropertyRequired(&errors, light.Properties, "center", nil, nil, "area_disc_spot_light", light.ID)
+		validateVec3PropertyRequired(&errors, light.Properties, "normal", nil, nil, "area_disc_spot_light", light.ID)
+		validatePositiveFloatRequired(&errors, light.Properties, "radius", "area_disc_spot_light", light.ID)
+		validateVec3PropertyRequired(&errors, light.Properties, "emission", &zero, nil, "area_disc_spot_light", light.ID)
+		validateFloatPropertyRequired(&errors, light.Properties, "cutoff_angle", &zero, &maxAngle, "area_disc_spot_light", light.ID, "cutoff_angle must be between 0 and 180 degrees")
+		validateFloatPropertyRequired(&errors, light.Properties, "falloff_exponent", &zero, nil, "area_disc_spot_light", light.ID, "")
+
+	case "":
+		// Already handled above
+	default:
+		errors = append(errors, fmt.Sprintf("unsupported light type '%s' for light '%s'", light.Type, light.ID))
+	}
+
+	if len(errors) > 0 {
+		return errors
+	}
+	return nil
+}
+
+// validateMaterial validates material properties
+func validateMaterial(errors *ValidationErrors, mat map[string]interface{}, shapeID string) {
+	// Material type is required
+	matType, ok := mat["type"].(string)
+	if !ok {
+		*errors = append(*errors, fmt.Sprintf("shape '%s' material must have a 'type' field", shapeID))
+		return
+	}
+
+	// Helper variables for range validation
+	zero := 0.0
+	one := 1.0
+	minRefractiveIndex := 1.0
+
+	switch matType {
+	case "lambertian":
+		validateVec3PropertyRequired(errors, mat, "albedo", &zero, &one, matType+" material", shapeID)
+
+	case "metal":
+		validateVec3PropertyRequired(errors, mat, "albedo", &zero, &one, matType+" material", shapeID)
+		validateFloatPropertyRequired(errors, mat, "fuzz", &zero, &one, matType+" material", shapeID, "")
+
+	case "dielectric":
+		validateFloatPropertyRequired(errors, mat, "refractive_index", &minRefractiveIndex, nil, matType+" material", shapeID, "")
+
+	default:
+		*errors = append(*errors, fmt.Sprintf("shape '%s' has unsupported material type '%s' (supported: lambertian, metal, dielectric)", shapeID, matType))
+	}
+}
+
 // Camera validation helpers
 
 // validateVec3Required validates that a Vec3 ([]float64) is non-nil and has exactly 3 elements
@@ -155,4 +301,53 @@ func validateStringRequired(errors *ValidationErrors, value string, fieldName st
 	if value == "" {
 		*errors = append(*errors, fmt.Sprintf("%s cannot be empty", fieldName))
 	}
+}
+
+// Helper functions for extracting properties from map[string]interface{}
+
+// extractFloatArray extracts a float array of specified length from properties
+func extractFloatArray(properties map[string]interface{}, key string, length int) ([]float64, bool) {
+	if val, ok := properties[key].([]interface{}); ok && len(val) == length {
+		result := make([]float64, length)
+		for i, v := range val {
+			if f, ok := v.(float64); ok {
+				result[i] = f
+			} else {
+				return nil, false
+			}
+		}
+		return result, true
+	}
+	return nil, false
+}
+
+// extractFloat extracts a single float value from properties
+func extractFloat(properties map[string]interface{}, key string) (float64, bool) {
+	if val, ok := properties[key].(float64); ok {
+		return val, true
+	}
+	return 0, false
+}
+
+// extractString extracts a string value from properties
+func extractString(properties map[string]interface{}, key string) (string, bool) {
+	if val, ok := properties[key].(string); ok {
+		return val, true
+	}
+	return "", false
+}
+
+// hasProperty checks if a property exists in the map
+func hasProperty(properties map[string]interface{}, key string) bool {
+	_, exists := properties[key]
+	return exists
+}
+
+// extractMaterial extracts material specification from shape properties
+// Returns (materialMap, exists)
+func extractMaterial(properties map[string]interface{}) (map[string]interface{}, bool) {
+	if mat, ok := properties["material"].(map[string]interface{}); ok {
+		return mat, true
+	}
+	return nil, false
 }

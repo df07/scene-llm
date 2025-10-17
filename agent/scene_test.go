@@ -1447,7 +1447,7 @@ func TestMaterialValidation(t *testing.T) {
 				},
 			},
 			expectError: true,
-			errorMatch:  "must be in range",
+			errorMatch:  "fuzz must be <=",
 		},
 		{
 			name: "albedo out of range",
@@ -1464,7 +1464,7 @@ func TestMaterialValidation(t *testing.T) {
 				},
 			},
 			expectError: true,
-			errorMatch:  "must be in range",
+			errorMatch:  "albedo[0] must be <=",
 		},
 	}
 
