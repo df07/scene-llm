@@ -702,9 +702,18 @@ func (sm *SceneManager) addLightToScene(raytracerScene *scene.Scene, lightReq Li
 	return nil
 }
 
+// RenderQuality represents different rendering quality presets
+type RenderQuality string
+
+const (
+	QualityDraft RenderQuality = "draft"
+	QualityHigh  RenderQuality = "high"
+)
+
 // ToRaytracerScene converts the scene state to a raytracer scene
 func (sm *SceneManager) ToRaytracerScene() (*scene.Scene, error) {
-	// Scene configuration
+	// Standard scene configuration
+	// Quality-specific rendering settings are applied by the renderer, not here
 	samplingConfig := scene.SamplingConfig{
 		Width:                     400,
 		Height:                    300,

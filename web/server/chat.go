@@ -30,6 +30,7 @@ type ChatSession struct {
 type ChatMessage struct {
 	SessionID string `json:"session_id,omitempty"`
 	Message   string `json:"message"`
+	Quality   string `json:"quality,omitempty"` // Render quality: "draft" or "high"
 }
 
 // ChatResponse represents the immediate response to a chat message
@@ -210,8 +211,14 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
 
+	// Parse quality setting (default to draft if not specified)
+	quality := agent.QualityDraft
+	if chatMsg.Quality == "high" {
+		quality = agent.QualityHigh
+	}
+
 	// Process the message asynchronously (this will stream results via SSE)
-	go s.processMessage(session, chatMsg.Message)
+	go s.processMessage(session, chatMsg.Message, quality)
 }
 
 // handleChatStream handles SSE connections for real-time chat updates
@@ -264,7 +271,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 }
 
 // processMessage processes a chat message and streams responses via SSE to all connected clients
-func (s *Server) processMessage(session *ChatSession, message string) {
+func (s *Server) processMessage(session *ChatSession, message string, quality agent.RenderQuality) {
 	// Create channel for agent events
 	agentEvents := make(chan agent.AgentEvent, 10)
 
@@ -304,8 +311,8 @@ func (s *Server) processMessage(session *ChatSession, message string) {
 			s.broadcastToSession(session.ID, SSEChatEvent{Type: e.EventType(), Data: e.Text})
 
 		case agent.SceneRenderEvent:
-			// Handle ready-to-render scene from agent
-			s.renderAndBroadcastScene(session.ID, e.RaytracerScene)
+			// Handle ready-to-render scene from agent (use quality from message)
+			s.renderAndBroadcastScene(session.ID, e.RaytracerScene, quality)
 
 		case agent.ToolCallEvent:
 			// Handle tool call events with logging and broadcasting
@@ -325,15 +332,19 @@ func (s *Server) processMessage(session *ChatSession, message string) {
 }
 
 // renderAndBroadcastScene renders a raytracer scene and broadcasts to a specific session
-func (s *Server) renderAndBroadcastScene(sessionID string, raytracerScene *scene.Scene) {
+func (s *Server) renderAndBroadcastScene(sessionID string, raytracerScene *scene.Scene, quality agent.RenderQuality) {
 	if len(raytracerScene.Shapes) == 0 {
 		return // No shapes to render
 	}
 
-	// Render the scene
+	// Render the scene with appropriate config based on quality
 	config := renderer.DefaultProgressiveConfig()
-	config.MaxSamplesPerPixel = 10
-	config.MaxPasses = 3
+	config.MaxPasses = 1
+	if quality == agent.QualityHigh {
+		config.MaxSamplesPerPixel = 500
+	} else {
+		config.MaxSamplesPerPixel = 10
+	}
 
 	logger := renderer.NewDefaultLogger()
 	integrator := integrator.NewPathTracingIntegrator(raytracerScene.SamplingConfig)
@@ -364,6 +375,7 @@ func (s *Server) renderAndBroadcastScene(sessionID string, raytracerScene *scene
 	sceneInfo := map[string]interface{}{
 		"shape_count":  len(raytracerScene.Shapes),
 		"image_base64": imageBase64,
+		"quality":      string(quality),
 	}
 
 	// Broadcast scene update with image
@@ -373,6 +385,63 @@ func (s *Server) renderAndBroadcastScene(sessionID string, raytracerScene *scene
 	})
 
 	log.Printf("Scene rendered for session %s - %d shapes", sessionID, len(raytracerScene.Shapes))
+}
+
+// RenderRequest represents a request to re-render the scene
+type RenderRequest struct {
+	SessionID string `json:"session_id"`
+	Quality   string `json:"quality"`
+}
+
+// handleRender handles requests to re-render the current scene with different quality
+func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Method not allowed"})
+		return
+	}
+
+	// Parse request
+	var renderReq RenderRequest
+	if err := json.NewDecoder(r.Body).Decode(&renderReq); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid JSON"})
+		return
+	}
+
+	// Get session
+	s.mutex.RLock()
+	session, exists := s.sessions[renderReq.SessionID]
+	s.mutex.RUnlock()
+
+	if !exists {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Session not found"})
+		return
+	}
+
+	// Parse quality setting
+	quality := agent.QualityDraft
+	if renderReq.Quality == "high" {
+		quality = agent.QualityHigh
+	}
+
+	// Get current scene from agent's scene manager
+	raytracerScene, err := session.Agent.GetSceneManager().ToRaytracerScene()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to generate scene"})
+		return
+	}
+
+	// Render and broadcast the scene
+	go s.renderAndBroadcastScene(renderReq.SessionID, raytracerScene, quality)
+
+	// Return success
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "rendering"})
 }
 
 // handleToolCallEvent processes tool call events with logging and client broadcast

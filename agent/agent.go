@@ -54,6 +54,11 @@ func (a *Agent) SetEventsChannel(events chan<- AgentEvent) {
 	a.events = events
 }
 
+// GetSceneManager returns the scene manager for this agent
+func (a *Agent) GetSceneManager() *SceneManager {
+	return a.sceneManager
+}
+
 // ProcessMessage handles a conversation with agentic loop and emits events
 func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Content) error {
 	const maxTurns = 10

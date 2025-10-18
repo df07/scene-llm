@@ -4,8 +4,10 @@ class SceneLLMChat {
         this.eventSource = null;
         this.isConnected = false;
         this.isProcessing = false;
+        this.renderQuality = 'draft'; // default to fast/draft quality
 
         this.initializeTheme();
+        this.initializeQuality();
         this.initializeElements();
         this.attachEventListeners();
         this.startNewSession();
@@ -15,6 +17,11 @@ class SceneLLMChat {
         // Load saved theme or default to light
         const savedTheme = localStorage.getItem('scene-llm-theme') || 'light';
         this.setTheme(savedTheme);
+    }
+
+    initializeQuality() {
+        // Always intialize quality to draft
+        this.setQuality('draft');
     }
 
     setTheme(theme) {
@@ -46,6 +53,22 @@ class SceneLLMChat {
         this.scenePreview = document.getElementById('scenePreview');
     }
 
+    setQuality(quality) {
+        this.renderQuality = quality;
+
+        // Update quality toggle buttons
+        document.querySelectorAll('.quality-switcher .quality-toggle').forEach(toggle => {
+            if (toggle.dataset.quality === quality) {
+                toggle.classList.add('active');
+            } else {
+                toggle.classList.remove('active');
+            }
+        });
+
+        // If there's an existing scene, re-render it with the new quality
+        this.triggerSceneRerender();
+    }
+
     attachEventListeners() {
         this.chatForm.addEventListener('submit', (e) => this.handleSubmit(e));
         this.clearChatButton.addEventListener('click', () => this.clearChat());
@@ -54,6 +77,13 @@ class SceneLLMChat {
         document.querySelectorAll('.theme-toggle').forEach(toggle => {
             toggle.addEventListener('click', () => {
                 this.setTheme(toggle.dataset.theme);
+            });
+        });
+
+        // Add quality toggle handlers
+        document.querySelectorAll('.quality-switcher .quality-toggle').forEach(toggle => {
+            toggle.addEventListener('click', () => {
+                this.setQuality(toggle.dataset.quality);
             });
         });
 
@@ -131,16 +161,21 @@ class SceneLLMChat {
         this.messageInput.value = '';
 
         try {
-            // Send message to server
+            // Send message to server with current quality preference
+            const requestBody = {
+                session_id: this.sessionId,
+                message: message,
+                quality: this.renderQuality
+            };
+
+            console.log('Sending chat message:', requestBody);
+
             const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    session_id: this.sessionId,
-                    message: message
-                })
+                body: JSON.stringify(requestBody)
             });
 
             if (!response.ok) {
@@ -296,8 +331,36 @@ class SceneLLMChat {
 
 
     handleSceneUpdate(data) {
+        console.log('Scene update received:', { quality: data.quality, shape_count: data.shape_count });
         if (data.image_base64) {
             this.displaySceneImage(data.image_base64);
+        }
+    }
+
+    async triggerSceneRerender() {
+        // Only re-render if we have an active session
+        if (!this.sessionId || !this.isConnected) {
+            return;
+        }
+
+        try {
+            // Request a scene re-render with the current quality setting
+            const response = await fetch('/api/render', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    session_id: this.sessionId,
+                    quality: this.renderQuality
+                })
+            });
+
+            if (!response.ok) {
+                console.error('Failed to trigger re-render:', response.status);
+            }
+        } catch (error) {
+            console.error('Failed to trigger scene re-render:', error);
         }
     }
 

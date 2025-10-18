@@ -142,6 +142,46 @@
     color: white;
 }
 
+/* ===== Quality Switcher ===== */
+.quality-switcher {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: 16px;
+    padding: 2px;
+    box-shadow: var(--shadow-light);
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    transition: all 0.3s ease;
+}
+
+.quality-switcher .quality-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 10px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.quality-switcher .quality-toggle:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.quality-switcher .quality-toggle.active {
+    background: var(--accent-blue);
+    color: white;
+}
+
 /* Chat-specific styles */
 body {
     font-family: Arial, sans-serif;
@@ -418,8 +458,9 @@ body {
 }
 
 .scene-image {
-    max-width: 100%;
-    max-height: 100%;
+    width: 400px;
+    height: 300px;
+    object-fit: contain;
     border-radius: 8px;
     box-shadow: var(--shadow-medium);
 }
