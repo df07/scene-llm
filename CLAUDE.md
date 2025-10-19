@@ -11,27 +11,11 @@ This file provides guidance to Claude Code when working with this repository.
 - **Interactive Modifications**: "Make the light softer" → LLM adjusts scene parameters
 - **Real-time Preview**: Immediate visual feedback via progressive raytracing
 
-## Architecture
-
-```
-scene-llm/
-├── agent/                    # LLM agent with agentic loop, function calling, error recovery
-├── web/
-│   ├── main.go               # Web server entry point
-│   ├── server/               # HTTP handlers, WebSocket, LLM chat integration
-│   └── static/               # HTML/JS/CSS for chat interface
-├── specs/                    # Design specifications
-└── go.mod                    # Imports go-progressive-raytracer as dependency
-```
-
 ## Build Commands
 
 ```bash
-# Run web server with auto-reload
+# Run web server with auto-reload (requires GOOGLE_API_KEY env var)
 cd web && air
-
-# Or build and run manually
-cd web && go build -o scene-server main.go && ./scene-server
 
 # Run tests
 go test ./...
@@ -46,42 +30,48 @@ go test ./...
 
 ## Code Structure
 
-### Agent Package (`agent/`)
-
 **Data Flow**: LLM Function Call → Parse → Request → Execute → Event
-
-**Key Files**:
-- `tools.go` - Tool declarations, request types, parsing (converts LLM calls to requests)
-- `agent.go` - Agentic loop, executes requests with validation
-- `scene.go` - Scene state management, validation logic
-- `events.go` - Event types for streaming updates to frontend
 
 **Type Hierarchy**:
 1. **Raw Data** (`ShapeRequest`, `LightRequest`) - Extracted from LLM function call args
 2. **Tool Requests** (`CreateShapeRequest`, `UpdateShapeRequest`, etc.) - Structured requests ready for execution
-   - All embed `BaseToolRequest` with `ToolType` and `Id` fields
-   - Implement `ToolRequest` interface for polymorphic handling
-3. **Events** (`ToolCallEvent`, `ProcessingEvent`, etc.) - Streamed to frontend via WebSocket
+3. **Events** (`ToolCallEvent`, `ProcessingEvent`, etc.) - Streamed to frontend via SSE
 
 **Validation Strategy**:
 - **Parsing** (`tools.go`): Extract values, return zero values for missing/malformed data
-- **Execution** (`agent.go` → `scene.go`): Validate all fields, return errors for invalid data
+- **Execution** (`scene.go`): Validate all fields, return errors for invalid data
 - Centralized validation catches all malformed LLM input
 
-**Request vs Event**:
-- **Request**: Unvalidated LLM intention (what the LLM wants to do)
-- **Event**: Validated result after execution (what actually happened)
+**Key Files**:
+- `agent/tools.go` - Tool declarations, request types, parsing
+- `agent/agent.go` - Agentic loop, executes requests with validation
+- `agent/scene.go` - Scene state management, validation logic
+- `agent/events.go` - Event types for streaming updates to frontend
+- `web/server/` - HTTP handlers, SSE, LLM chat integration
 
-### Web Package (`web/`)
+## Key Implementation Details
 
-- `main.go` - Server entry point
-- `server/` - HTTP handlers, WebSocket, LLM chat integration, event streaming
-- `static/` - Frontend HTML/JS/CSS
+### LLM Provider
+- **Current**: Google Gemini (`gemini-2.5-flash`) via `google.golang.org/genai`
+- **Agentic Loop**: Max 10 turns with retry logic for network errors
+- **System Prompt**: Dynamically generated with current scene context
 
-## Technical Approach
+### Supported Shapes & Materials
+**Shapes**: sphere, box, quad, disc
+**Materials**: lambertian (diffuse), metal (reflective), dielectric (glass/transparent)
+**Lights**: point_spot, area_quad, disc_spot, area_sphere, area_disc_spot, infinite environment lights
 
-1. **Scene Schema**: Custom JSON format optimized for LLM function calls
-2. **LLM Integration**: Function calling to manipulate scene elements (create_shape, set_camera, etc.)
-3. **Scene Management**: In-memory scene state with validation and conversion to raytracer format
-4. **Progressive Rendering**: Real-time tile streaming for immediate visual feedback
-5. **Multi-Provider Support**: Pluggable LLM providers to optimize cost/capability
+### Property Bags & IDs
+- **Property Bags**: Shapes/lights use `map[string]interface{}` for flexibility across different types and partial updates
+- **IDs**: User-defined semantic strings (e.g., "blue_sphere"), must be unique, validated on create/update
+
+### Frontend Communication
+- **Protocol**: Server-Sent Events (SSE), not WebSocket
+- **Events**: processing, llm_response, function_calls, scene_render, error, complete
+- **Rendering**: Draft mode (10 samples) or High quality (500 samples)
+- **Sessions**: Persist agent + SceneManager state across messages
+
+### Error Handling Pattern
+- **Parsing**: Permissive - returns zero values for missing data
+- **Validation**: Strict - all validation in `scene.go`, returns `ValidationErrors`
+- **LLM Feedback**: Tool failures return structured errors so LLM can retry
