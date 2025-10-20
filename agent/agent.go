@@ -1,13 +1,17 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"image/png"
 	"log"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/df07/go-progressive-raytracer/pkg/integrator"
+	"github.com/df07/go-progressive-raytracer/pkg/renderer"
 	"google.golang.org/genai"
 )
 
@@ -148,6 +152,16 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Conten
 						Response: resultMap,
 					},
 				})
+
+				// If this is a render_scene request with an image, add it as an InlineData part
+				if renderReq, ok := operation.(*RenderSceneRequest); ok && renderReq.RenderedImage != nil {
+					functionResponses = append(functionResponses, &genai.Part{
+						InlineData: &genai.Blob{
+							Data:     renderReq.RenderedImage,
+							MIMEType: "image/png",
+						},
+					})
+				}
 			}
 		}
 
@@ -192,6 +206,7 @@ type ToolResult struct {
 // executeToolRequests executes a tool operation and returns structured result
 func (a *Agent) executeToolRequests(operation ToolRequest) ToolResult {
 	startTime := time.Now()
+	toolCallID := fmt.Sprintf("%s_%d", operation.ToolName(), startTime.UnixNano())
 	var err error
 	var result interface{}
 
@@ -272,6 +287,68 @@ func (a *Agent) executeToolRequests(operation ToolRequest) ToolResult {
 		if err == nil {
 			result = op.Camera
 		}
+	case *RenderSceneRequest:
+		// Emit start event to show "Rendering..." in UI
+		a.events <- NewToolCallStartEvent(toolCallID, operation)
+
+		// Get scene for rendering
+		raytracerScene, sceneErr := a.sceneManager.ToRaytracerScene()
+		if sceneErr != nil {
+			err = fmt.Errorf("failed to create scene: %w", sceneErr)
+			break
+		}
+
+		if len(raytracerScene.Shapes) == 0 {
+			err = fmt.Errorf("cannot render empty scene - add shapes first")
+			break
+		}
+
+		log.Printf("[render_scene] Scene has %d shapes, camera at %v looking at %v",
+			len(raytracerScene.Shapes),
+			raytracerScene.CameraConfig.Center,
+			raytracerScene.CameraConfig.LookAt)
+
+		// Render at same size as user preview (400x300) with high quality (500 samples)
+		config := renderer.DefaultProgressiveConfig()
+		config.MaxPasses = 1
+		config.MaxSamplesPerPixel = 500
+
+		// Use the scene's default dimensions (400x300) - don't modify them
+
+		logger := renderer.NewDefaultLogger()
+		integ := integrator.NewPathTracingIntegrator(raytracerScene.SamplingConfig)
+
+		raytracer, renderErr := renderer.NewProgressiveRaytracer(raytracerScene, config, integ, logger)
+		if renderErr != nil {
+			err = fmt.Errorf("failed to create raytracer: %w", renderErr)
+			break
+		}
+
+		// Render (synchronous - this takes several seconds)
+		resultImg, _, renderErr := raytracer.RenderPass(1, nil)
+		if renderErr != nil {
+			err = fmt.Errorf("render failed: %w", renderErr)
+			break
+		}
+
+		// Encode as PNG
+		var buf bytes.Buffer
+		if encodeErr := png.Encode(&buf, resultImg); encodeErr != nil {
+			err = fmt.Errorf("failed to encode image: %w", encodeErr)
+			break
+		}
+
+		// Store image in request
+		op.RenderedImage = buf.Bytes()
+
+		// Return success with metadata
+		result = map[string]interface{}{
+			"shape_count":       len(raytracerScene.Shapes),
+			"samples_per_pixel": 500,
+			"width":             raytracerScene.SamplingConfig.Width,
+			"height":            raytracerScene.SamplingConfig.Height,
+			"render_time_ms":    time.Since(startTime).Milliseconds(),
+		}
 	}
 
 	// Calculate duration
@@ -291,7 +368,12 @@ func (a *Agent) executeToolRequests(operation ToolRequest) ToolResult {
 		}
 	}
 
-	a.events <- NewToolCallEvent(operation, success, errorMsg, duration)
+	// Create tool call event with image data if this is a render_scene request
+	toolEvent := NewToolCallEvent(toolCallID, operation, success, errorMsg, duration)
+	if renderReq, ok := operation.(*RenderSceneRequest); ok && renderReq.RenderedImage != nil {
+		toolEvent.RenderedImage = renderReq.RenderedImage
+	}
+	a.events <- toolEvent
 
 	// Return structured result (for LLM feedback)
 	if success {

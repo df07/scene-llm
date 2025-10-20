@@ -415,3 +415,200 @@ func TestMultipleTextParts(t *testing.T) {
 
 	close(events)
 }
+
+func TestRenderSceneEmptyScene(t *testing.T) {
+	events := make(chan AgentEvent, 100)
+	agent := NewWithMockLLM(events, &MockLLMClient{})
+
+	// Create a render_scene request without any shapes
+	req := &RenderSceneRequest{
+		BaseToolRequest: BaseToolRequest{ToolType: "render_scene"},
+	}
+
+	result := agent.executeToolRequests(req)
+
+	// Should fail with empty scene error
+	if result.Success {
+		t.Fatal("Expected render_scene to fail on empty scene")
+	}
+
+	if len(result.Errors) == 0 {
+		t.Fatal("Expected error messages")
+	}
+
+	expectedError := "cannot render empty scene - add shapes first"
+	if result.Errors[0] != expectedError {
+		t.Errorf("Expected error %q, got %q", expectedError, result.Errors[0])
+	}
+
+	// Should have emitted a start event and a completion event
+	var startEvents []ToolCallStartEvent
+	var toolEvents []ToolCallEvent
+	for len(events) > 0 {
+		event := <-events
+		if se, ok := event.(ToolCallStartEvent); ok {
+			startEvents = append(startEvents, se)
+		}
+		if te, ok := event.(ToolCallEvent); ok {
+			toolEvents = append(toolEvents, te)
+		}
+	}
+
+	// Should have 1 start event and 1 completion event (with error)
+	if len(startEvents) != 1 {
+		t.Errorf("Expected 1 ToolCallStartEvent, got %d", len(startEvents))
+	}
+	if len(toolEvents) != 1 {
+		t.Errorf("Expected 1 ToolCallEvent, got %d", len(toolEvents))
+	}
+
+	close(events)
+}
+
+func TestRenderSceneWithShape(t *testing.T) {
+	events := make(chan AgentEvent, 100)
+	agent := NewWithMockLLM(events, &MockLLMClient{})
+
+	// Add a simple sphere to the scene
+	shape := ShapeRequest{
+		ID:   "test_sphere",
+		Type: "sphere",
+		Properties: map[string]interface{}{
+			"center": []interface{}{0.0, 0.0, 0.0},
+			"radius": 1.0,
+			"material": map[string]interface{}{
+				"type":   "lambertian",
+				"albedo": []interface{}{0.8, 0.3, 0.3},
+			},
+		},
+	}
+	err := agent.sceneManager.AddShapes([]ShapeRequest{shape})
+	if err != nil {
+		t.Fatalf("Failed to add shape: %v", err)
+	}
+
+	// Add a light so we can actually see the sphere
+	light := LightRequest{
+		ID:   "test_light",
+		Type: "point_spot_light",
+		Properties: map[string]interface{}{
+			"center":   []interface{}{2.0, 3.0, 2.0},
+			"emission": []interface{}{10.0, 10.0, 10.0},
+		},
+	}
+	err = agent.sceneManager.AddLights([]LightRequest{light})
+	if err != nil {
+		t.Fatalf("Failed to add light: %v", err)
+	}
+
+	// Create render_scene request
+	req := &RenderSceneRequest{
+		BaseToolRequest: BaseToolRequest{ToolType: "render_scene"},
+	}
+
+	// Execute the render (this will actually render, but should be fast for 100x75)
+	result := agent.executeToolRequests(req)
+
+	// Should succeed
+	if !result.Success {
+		t.Fatalf("Expected render_scene to succeed, got errors: %v", result.Errors)
+	}
+
+	// Check that we got metadata back
+	resultMap, ok := result.Result.(map[string]interface{})
+	if !ok {
+		t.Fatal("Expected result to be a map")
+	}
+
+	if resultMap["shape_count"] != 1 {
+		t.Errorf("Expected shape_count=1, got %v", resultMap["shape_count"])
+	}
+	if resultMap["samples_per_pixel"] != 500 {
+		t.Errorf("Expected samples_per_pixel=500, got %v", resultMap["samples_per_pixel"])
+	}
+	if resultMap["width"] != 400 {
+		t.Errorf("Expected width=400, got %v", resultMap["width"])
+	}
+	if resultMap["height"] != 300 {
+		t.Errorf("Expected height=300, got %v", resultMap["height"])
+	}
+
+	// Check that the image was populated
+	if req.RenderedImage == nil {
+		t.Fatal("Expected RenderedImage to be populated")
+	}
+
+	if len(req.RenderedImage) == 0 {
+		t.Fatal("Expected RenderedImage to have data")
+	}
+
+	// Verify it's a valid PNG by checking the header
+	if len(req.RenderedImage) < 8 {
+		t.Fatal("RenderedImage too small to be a valid PNG")
+	}
+	pngHeader := []byte{137, 80, 78, 71, 13, 10, 26, 10}
+	for i := 0; i < 8; i++ {
+		if req.RenderedImage[i] != pngHeader[i] {
+			t.Fatalf("Invalid PNG header at byte %d: expected %d, got %d", i, pngHeader[i], req.RenderedImage[i])
+		}
+	}
+
+	t.Logf("Rendered PNG size: %d bytes", len(req.RenderedImage))
+
+	// Check that we got start and completion events
+	var startEvents []ToolCallStartEvent
+	var toolEvents []ToolCallEvent
+	for len(events) > 0 {
+		event := <-events
+		if se, ok := event.(ToolCallStartEvent); ok {
+			startEvents = append(startEvents, se)
+		}
+		if te, ok := event.(ToolCallEvent); ok {
+			toolEvents = append(toolEvents, te)
+		}
+	}
+
+	// Should have 1 start event
+	if len(startEvents) != 1 {
+		t.Errorf("Expected 1 ToolCallStartEvent, got %d", len(startEvents))
+	}
+
+	// Should have 1 completion event
+	if len(toolEvents) != 1 {
+		t.Errorf("Expected 1 ToolCallEvent, got %d", len(toolEvents))
+	}
+
+	// The completion event should have the image
+	if len(toolEvents) > 0 {
+		if !toolEvents[0].Success {
+			t.Error("Expected ToolCallEvent to be successful")
+		}
+		if len(toolEvents[0].RenderedImage) == 0 {
+			t.Error("Expected ToolCallEvent to have RenderedImage data")
+		}
+	}
+
+	close(events)
+}
+
+func TestRenderSceneToolParsing(t *testing.T) {
+	// Test that render_scene function call is parsed correctly
+	call := &genai.FunctionCall{
+		Name: "render_scene",
+		Args: map[string]interface{}{},
+	}
+
+	req := parseToolRequestFromFunctionCall(call)
+	if req == nil {
+		t.Fatal("Expected non-nil request")
+	}
+
+	renderReq, ok := req.(*RenderSceneRequest)
+	if !ok {
+		t.Fatalf("Expected *RenderSceneRequest, got %T", req)
+	}
+
+	if renderReq.ToolName() != "render_scene" {
+		t.Errorf("Expected tool name 'render_scene', got %q", renderReq.ToolName())
+	}
+}

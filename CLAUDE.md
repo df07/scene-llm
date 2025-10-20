@@ -55,6 +55,8 @@ go test ./...
 - **Current**: Google Gemini (`gemini-2.5-flash`) via `google.golang.org/genai`
 - **Agentic Loop**: Max 10 turns with retry logic for network errors
 - **System Prompt**: Dynamically generated with current scene context
+- **Tools**: 9 tools (create/update/remove for shapes and lights, set_environment_lighting, set_camera, **render_scene**)
+  - `render_scene` renders at 400x300px, 500 samples, returns PNG image to LLM for visual inspection (expensive, use sparingly)
 
 ### Supported Shapes & Materials
 **Shapes**: sphere, box, quad, disc

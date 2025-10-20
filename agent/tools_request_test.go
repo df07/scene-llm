@@ -198,7 +198,7 @@ func TestToolCallEventCreation(t *testing.T) {
 		},
 	}
 
-	event := NewToolCallEvent(operation, true, "", 25)
+	event := NewToolCallEvent("test_id", operation, true, "", 25)
 
 	if event.Request != operation {
 		t.Error("Expected Request to match the provided operation")

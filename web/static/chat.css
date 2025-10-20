@@ -498,6 +498,26 @@ body {
     border-radius: 4px;
 }
 
+.tool-call-container.in-progress {
+    border-left-color: #ffa500;
+    background-color: #fff9e6;
+}
+
+[data-theme="dark"] .tool-call-container.in-progress {
+    background-color: #3a2f00;
+    border-left-color: #aa7700;
+}
+
+.loading-spinner {
+    display: inline-block;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
 .tool-call-summary {
     display: flex;
     align-items: center;

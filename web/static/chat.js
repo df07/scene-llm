@@ -230,6 +230,9 @@ class SceneLLMChat {
             case 'scene_update':
                 this.handleSceneUpdate(event.data);
                 break;
+            case 'function_call_start':
+                this.handleFunctionCallStart(event.data);
+                break;
             case 'function_calls':
                 this.handleFunctionCalls(event.data);
                 break;
@@ -364,15 +367,41 @@ class SceneLLMChat {
         }
     }
 
-    handleFunctionCalls(toolCallEvent) {
-        // Handle the ToolCallEvent format
-        // toolCallEvent has: request, success, error, duration, timestamp
+    handleFunctionCallStart(toolCallStartEvent) {
+        // Create a placeholder tool call element with a loading indicator
+        const container = document.createElement('div');
+        container.className = 'tool-call-container in-progress';
+        container.dataset.toolCallId = toolCallStartEvent.id;
 
-        // Create tool call message element
+        const summaryDiv = document.createElement('div');
+        summaryDiv.className = 'tool-call-summary in-progress';
+
+        const toolName = this.getToolDisplayName(toolCallStartEvent.request.tool_name);
+        summaryDiv.innerHTML = `🔧 ${toolName} <span class="loading-spinner">⏳</span>`;
+
+        container.appendChild(summaryDiv);
+
+        // Add as an assistant message
+        this.addMessage('assistant', container);
+    }
+
+    handleFunctionCalls(toolCallEvent) {
+        // Handle the ToolCallEvent format (completion event)
+        // Find and replace the matching start event by ID
+        const existingContainer = this.messagesContainer.querySelector(
+            `[data-tool-call-id="${toolCallEvent.id}"]`
+        );
+
+        // Create the completed tool call element
         const toolCallDiv = this.createToolCallElement(toolCallEvent);
 
-        // Add as a agent message
-        this.addMessage('assistant', toolCallDiv);
+        if (existingContainer) {
+            // Replace the in-progress container with the completed one
+            existingContainer.replaceWith(toolCallDiv);
+        } else {
+            // If no matching start event (shouldn't happen, but be defensive)
+            this.addMessage('assistant', toolCallDiv);
+        }
     }
 
     createToolCallElement(toolCallEvent) {
@@ -504,8 +533,22 @@ class SceneLLMChat {
         const properties = { ...op };
         delete properties.tool_name;
 
+        // Extract rendered_image if present
+        const renderedImage = properties.rendered_image;
+        delete properties.rendered_image;
+
         if (Object.keys(properties).length > 0) {
             details += `<strong>Tool Request Data:</strong> <pre>${this.formatCompactJSON(properties)}</pre>`;
+        }
+
+        // If there's a rendered image, display it as a thumbnail
+        if (renderedImage) {
+            details += `
+                <div class="rendered-image-preview">
+                    <strong>Rendered Image:</strong><br>
+                    <img src="data:image/png;base64,${renderedImage}" alt="Rendered scene" style="max-width: 200px; border: 1px solid var(--border-color); border-radius: 4px; margin-top: 8px;">
+                </div>
+            `;
         }
 
         details += '</div>';

@@ -91,6 +91,11 @@ type SetCameraRequest struct {
 	Camera CameraInfo `json:"camera"`
 }
 
+type RenderSceneRequest struct {
+	BaseToolRequest
+	RenderedImage []byte `json:"rendered_image,omitempty"` // Populated after execution
+}
+
 // getAllToolDeclarations returns all available tool declarations
 func getAllToolDeclarations() []*genai.FunctionDeclaration {
 	return []*genai.FunctionDeclaration{
@@ -102,6 +107,7 @@ func getAllToolDeclarations() []*genai.FunctionDeclaration {
 		removeLightToolDeclaration(),
 		setEnvironmentLightingToolDeclaration(),
 		setCameraToolDeclaration(),
+		renderSceneToolDeclaration(),
 	}
 }
 
@@ -313,6 +319,17 @@ func setCameraToolDeclaration() *genai.FunctionDeclaration {
 	}
 }
 
+func renderSceneToolDeclaration() *genai.FunctionDeclaration {
+	return &genai.FunctionDeclaration{
+		Name:        "render_scene",
+		Description: "Render the scene at high quality and receive the image for visual inspection. You can see the rendered result to verify colors, materials, lighting, and composition. **WARNING: Expensive (500 samples, ~3-5 seconds). Use sparingly.**",
+		Parameters: &genai.Schema{
+			Type:       genai.TypeObject,
+			Properties: map[string]*genai.Schema{},
+		},
+	}
+}
+
 // ------------------------------------------------------------
 // Parsing functions - convert LLM function calls to requests
 // ------------------------------------------------------------
@@ -336,6 +353,8 @@ func parseToolRequestFromFunctionCall(call *genai.FunctionCall) ToolRequest {
 		return parseSetEnvironmentLightingRequest(call)
 	case "set_camera":
 		return parseSetCameraRequest(call)
+	case "render_scene":
+		return parseRenderSceneRequest(call)
 	default:
 		return nil
 	}
@@ -437,6 +456,12 @@ func parseSetCameraRequest(call *genai.FunctionCall) *SetCameraRequest {
 			VFov:     vfov,
 			Aperture: aperture,
 		},
+	}
+}
+
+func parseRenderSceneRequest(call *genai.FunctionCall) *RenderSceneRequest {
+	return &RenderSceneRequest{
+		BaseToolRequest: BaseToolRequest{ToolType: "render_scene"},
 	}
 }
 

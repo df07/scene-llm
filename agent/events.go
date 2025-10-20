@@ -24,13 +24,24 @@ type ResponseEvent struct {
 
 func (e ResponseEvent) EventType() string { return "llm_response" }
 
-// ToolCallEvent using ToolRequest
+// ToolCallStartEvent indicates a tool has started executing
+type ToolCallStartEvent struct {
+	ID        string      `json:"id"`        // Unique ID for this tool call
+	Request   ToolRequest `json:"request"`   // The tool request that is starting
+	Timestamp time.Time   `json:"timestamp"` // When the tool started
+}
+
+func (e ToolCallStartEvent) EventType() string { return "function_call_start" }
+
+// ToolCallEvent using ToolRequest (completion event)
 type ToolCallEvent struct {
-	Request   ToolRequest `json:"request"` // The tool request that was attempted
-	Success   bool        `json:"success"` // Tool request result
-	Error     string      `json:"error,omitempty"`
-	Duration  int64       `json:"duration"`  // Tool request duration in ms
-	Timestamp time.Time   `json:"timestamp"` // When the tool request occurred
+	ID            string      `json:"id"`      // Unique ID matching the start event
+	Request       ToolRequest `json:"request"` // The tool request that was attempted
+	Success       bool        `json:"success"` // Tool request result
+	Error         string      `json:"error,omitempty"`
+	Duration      int64       `json:"duration"`                 // Tool request duration in ms
+	Timestamp     time.Time   `json:"timestamp"`                // When the tool request occurred
+	RenderedImage []byte      `json:"rendered_image,omitempty"` // Image data for render_scene tool
 }
 
 func (e ToolCallEvent) EventType() string { return "function_calls" }
@@ -68,9 +79,19 @@ func NewResponseEvent(text string) ResponseEvent {
 	return ResponseEvent{Text: text}
 }
 
+// Helper for creating ToolCallStartEvent
+func NewToolCallStartEvent(id string, request ToolRequest) ToolCallStartEvent {
+	return ToolCallStartEvent{
+		ID:        id,
+		Request:   request,
+		Timestamp: time.Now(),
+	}
+}
+
 // Helper for creating ToolCallEvent with ToolRequest
-func NewToolCallEvent(request ToolRequest, success bool, errorMsg string, duration int64) ToolCallEvent {
+func NewToolCallEvent(id string, request ToolRequest, success bool, errorMsg string, duration int64) ToolCallEvent {
 	return ToolCallEvent{
+		ID:        id,
 		Request:   request,
 		Success:   success,
 		Error:     errorMsg,

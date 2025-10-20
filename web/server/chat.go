@@ -314,6 +314,10 @@ func (s *Server) processMessage(session *ChatSession, message string, quality ag
 			// Handle ready-to-render scene from agent (use quality from message)
 			s.renderAndBroadcastScene(session.ID, e.RaytracerScene, quality)
 
+		case agent.ToolCallStartEvent:
+			// Handle tool call start events
+			s.broadcastToSession(session.ID, SSEChatEvent{Type: e.EventType(), Data: e})
+
 		case agent.ToolCallEvent:
 			// Handle tool call events with logging and broadcasting
 			s.handleToolCallEvent(session.ID, e)
