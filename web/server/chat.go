@@ -132,12 +132,15 @@ func (s *Server) removeSSEClient(sessionID string, client chan SSEChatEvent) {
 	defer s.clientMutex.Unlock()
 
 	if clients := s.sseClients[sessionID]; clients != nil {
-		delete(clients, client)
-		if len(clients) == 0 {
-			delete(s.sseClients, sessionID)
+		// Only close if the client is still in the map (not already removed)
+		if _, exists := clients[client]; exists {
+			delete(clients, client)
+			if len(clients) == 0 {
+				delete(s.sseClients, sessionID)
+			}
+			close(client)
 		}
 	}
-	close(client)
 }
 
 // broadcastToSession sends an SSE event to all clients of a session
