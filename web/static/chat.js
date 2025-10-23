@@ -225,7 +225,16 @@ class SceneLLMChat {
                 break;
             case 'llm_response':
                 this.removeProcessingMessage();
-                this.addMessage('assistant', event.data);
+                // Check if this is a thinking token
+                const isThought = event.data.thought === true;
+                let text = event.data.text;
+
+                // Strip "thought\n" prefix from thinking tokens
+                if (isThought && text.toLowerCase().startsWith('thought\n')) {
+                    text = text.substring(8); // Remove "thought\n"
+                }
+
+                this.addMessage('assistant', text, isThought);
                 break;
             case 'scene_update':
                 this.handleSceneUpdate(event.data);
@@ -264,12 +273,17 @@ class SceneLLMChat {
         }
     }
 
-    addMessage(role, content) {
+    addMessage(role, content, isThought = false) {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${role}`;
 
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
+
+        // Apply thinking styling if this is a thought
+        if (isThought) {
+            contentDiv.className = 'message-content thinking';
+        }
 
         if (typeof content === 'string') {
             // Simple text content

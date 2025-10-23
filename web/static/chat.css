@@ -347,6 +347,20 @@ body {
     border-bottom-left-radius: 4px;
 }
 
+.message.assistant .message-content.thinking {
+    background-color: #f5f5f5;
+    color: #666;
+    border-left: 3px solid #999;
+    font-style: italic;
+    opacity: 0.9;
+}
+
+[data-theme="dark"] .message.assistant .message-content.thinking {
+    background-color: #2a2a2a;
+    color: #aaa;
+    border-left-color: #666;
+}
+
 .message.system .message-content {
     background-color: var(--message-system-bg);
     color: var(--message-system-text);

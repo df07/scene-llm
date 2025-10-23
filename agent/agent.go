@@ -100,7 +100,7 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Conten
 		}
 
 		// Process the response
-		if len(result.Candidates) == 0 || len(result.Candidates[0].Content.Parts) == 0 {
+		if len(result.Candidates) == 0 || result.Candidates[0].Content == nil || len(result.Candidates[0].Content.Parts) == 0 {
 			log.Printf("No response from LLM")
 			a.events <- NewErrorEvent(fmt.Errorf("no response from LLM"))
 			return fmt.Errorf("no response from LLM")
@@ -115,7 +115,10 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Conten
 				functionCalls = append(functionCalls, part.FunctionCall)
 			} else if part.Text != "" {
 				// Emit each text part as a separate response event
-				a.events <- NewResponseEvent(part.Text)
+				// Check if this is a thinking token - SDK doesn't always set Thought field,
+				// so we check both the field and the text content
+				isThought := part.Thought || strings.HasPrefix(strings.ToLower(strings.TrimSpace(part.Text)), "thought")
+				a.events <- ResponseEvent{Text: part.Text, Thought: isThought}
 			} else {
 				// Log unexpected part types
 				log.Printf("WARNING: Received unexpected part type from LLM (not FunctionCall or Text)")

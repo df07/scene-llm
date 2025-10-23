@@ -310,8 +310,8 @@ func (s *Server) processMessage(session *ChatSession, message string, quality ag
 			}
 			session.Messages = append(session.Messages, assistantMessage)
 			s.mutex.Unlock()
-			// Broadcast the response
-			s.broadcastToSession(session.ID, SSEChatEvent{Type: e.EventType(), Data: e.Text})
+			// Broadcast the response (send whole event to include thought field)
+			s.broadcastToSession(session.ID, SSEChatEvent{Type: e.EventType(), Data: e})
 
 		case agent.SceneRenderEvent:
 			// Handle ready-to-render scene from agent (use quality from message)

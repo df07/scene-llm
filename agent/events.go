@@ -19,7 +19,8 @@ type ProcessingEvent struct {
 func (e ProcessingEvent) EventType() string { return "processing" }
 
 type ResponseEvent struct {
-	Text string `json:"text"`
+	Text    string `json:"text"`
+	Thought bool   `json:"thought,omitempty"` // True if this is a thinking token from the model
 }
 
 func (e ResponseEvent) EventType() string { return "llm_response" }
