@@ -2,7 +2,6 @@ package agent
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/df07/go-progressive-raytracer/pkg/core"
 	"github.com/df07/go-progressive-raytracer/pkg/geometry"
@@ -46,7 +45,7 @@ func NewSceneManager() *SceneManager {
 	}
 }
 
-// AddShapes adds shapes to the scene and updates camera positioning
+// AddShapes adds shapes to the scene
 func (sm *SceneManager) AddShapes(shapes []ShapeRequest) error {
 	if len(shapes) == 0 {
 		return nil
@@ -68,47 +67,7 @@ func (sm *SceneManager) AddShapes(shapes []ShapeRequest) error {
 	// Add shapes to scene
 	sm.state.Shapes = append(sm.state.Shapes, shapes...)
 
-	// Update camera to look at the first new shape with proper distance
-	firstShape := shapes[0]
-	sm.updateCameraForShape(firstShape)
-
 	return nil
-}
-
-// updateCameraForShape positions camera to view a shape optimally
-func (sm *SceneManager) updateCameraForShape(shape ShapeRequest) {
-	// Extract position from properties
-	var position [3]float64
-	var size float64 = 2.0 // default size
-
-	if props := shape.Properties; props != nil {
-		// Try to get position (try different property names)
-		if centerArray, ok := extractFloatArray(props, "center", 3); ok {
-			copy(position[:], centerArray) // For spheres, boxes, discs
-		} else if cornerArray, ok := extractFloatArray(props, "corner", 3); ok {
-			copy(position[:], cornerArray) // For quads
-		}
-
-		// Try to get size (radius for sphere/disc, dimensions for box, edge vectors for quad)
-		if radius, ok := extractFloat(props, "radius"); ok {
-			size = radius
-		} else if sizeVal, ok := extractFloat(props, "size"); ok {
-			size = sizeVal
-		} else if dimsArray, ok := extractFloatArray(props, "dimensions", 3); ok {
-			size = dimsArray[0] // Use first dimension as representative size
-		} else if uArray, ok := extractFloatArray(props, "u", 3); ok {
-			// For quads, use the length of the u vector as representative size
-			size = math.Sqrt(uArray[0]*uArray[0] + uArray[1]*uArray[1] + uArray[2]*uArray[2])
-		}
-	}
-
-	cameraDistance := size*3 + 5
-	sm.state.Camera.Center = []float64{
-		position[0],
-		position[1],
-		position[2] + cameraDistance,
-	}
-	sm.state.Camera.LookAt = []float64{position[0], position[1], position[2]}
 }
 
 // GetState returns a deep copy of the current scene state

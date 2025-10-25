@@ -94,40 +94,6 @@ func TestAddShapes(t *testing.T) {
 	}
 }
 
-func TestAddShapesUpdatesCamera(t *testing.T) {
-	sm := NewSceneManager()
-
-	shape := ShapeRequest{
-		ID:   "test_sphere",
-		Type: "sphere",
-		Properties: map[string]interface{}{
-			"center": []interface{}{10.0, 20.0, 30.0},
-			"radius": 5.0,
-			"color":  []interface{}{1.0, 0.0, 0.0},
-		},
-	}
-
-	err := sm.AddShapes([]ShapeRequest{shape})
-	if err != nil {
-		t.Fatalf("AddShapes() returned error: %v", err)
-	}
-
-	state := sm.GetState()
-
-	// Camera should be positioned relative to the first shape
-	// expectedDistance := radius*3 + 5 = 5.0*3 + 5 = 20
-	expectedCamera := CameraInfo{
-		Center:   []float64{10, 20, 50}, // shape position Z + 20
-		LookAt:   []float64{10, 20, 30}, // shape position
-		VFov:     45.0,
-		Aperture: 0.0,
-	}
-
-	if !cameraEqual(state.Camera, expectedCamera) {
-		t.Errorf("Expected camera %+v, got %+v", expectedCamera, state.Camera)
-	}
-}
-
 func TestAddEmptyShapes(t *testing.T) {
 	sm := NewSceneManager()
 
