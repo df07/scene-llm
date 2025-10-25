@@ -96,6 +96,11 @@ type RenderSceneRequest struct {
 	RenderedImage []byte `json:"rendered_image,omitempty"` // Populated after execution
 }
 
+type GetSceneStateRequest struct {
+	BaseToolRequest
+	SceneState map[string]interface{} `json:"scene_state,omitempty"` // Populated after execution
+}
+
 // getAllToolDeclarations returns all available tool declarations
 func getAllToolDeclarations() []*genai.FunctionDeclaration {
 	return []*genai.FunctionDeclaration{
@@ -108,6 +113,7 @@ func getAllToolDeclarations() []*genai.FunctionDeclaration {
 		setEnvironmentLightingToolDeclaration(),
 		setCameraToolDeclaration(),
 		renderSceneToolDeclaration(),
+		getSceneStateToolDeclaration(),
 	}
 }
 
@@ -330,6 +336,17 @@ func renderSceneToolDeclaration() *genai.FunctionDeclaration {
 	}
 }
 
+func getSceneStateToolDeclaration() *genai.FunctionDeclaration {
+	return &genai.FunctionDeclaration{
+		Name:        "get_scene_state",
+		Description: "Get the complete current scene state as JSON, including all shapes, lights, camera, and environment settings. Use this when you need to check what's currently in the scene or if you're unsure about the current state.",
+		Parameters: &genai.Schema{
+			Type:       genai.TypeObject,
+			Properties: map[string]*genai.Schema{},
+		},
+	}
+}
+
 // ------------------------------------------------------------
 // Parsing functions - convert LLM function calls to requests
 // ------------------------------------------------------------
@@ -355,6 +372,8 @@ func parseToolRequestFromFunctionCall(call *genai.FunctionCall) ToolRequest {
 		return parseSetCameraRequest(call)
 	case "render_scene":
 		return parseRenderSceneRequest(call)
+	case "get_scene_state":
+		return parseGetSceneStateRequest(call)
 	default:
 		return nil
 	}
@@ -462,6 +481,12 @@ func parseSetCameraRequest(call *genai.FunctionCall) *SetCameraRequest {
 func parseRenderSceneRequest(call *genai.FunctionCall) *RenderSceneRequest {
 	return &RenderSceneRequest{
 		BaseToolRequest: BaseToolRequest{ToolType: "render_scene"},
+	}
+}
+
+func parseGetSceneStateRequest(call *genai.FunctionCall) *GetSceneStateRequest {
+	return &GetSceneStateRequest{
+		BaseToolRequest: BaseToolRequest{ToolType: "get_scene_state"},
 	}
 }
 

@@ -612,3 +612,143 @@ func TestRenderSceneToolParsing(t *testing.T) {
 		t.Errorf("Expected tool name 'render_scene', got %q", renderReq.ToolName())
 	}
 }
+
+func TestGetSceneStateWithEmptyScene(t *testing.T) {
+	events := make(chan AgentEvent, 100)
+	agent := NewWithMockLLM(events, &MockLLMClient{})
+
+	req := &GetSceneStateRequest{
+		BaseToolRequest: BaseToolRequest{ToolType: "get_scene_state"},
+	}
+
+	result := agent.executeToolRequests(req)
+
+	if !result.Success {
+		t.Fatalf("Expected success, got errors: %v", result.Errors)
+	}
+
+	resultMap, ok := result.Result.(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected result to be map[string]interface{}, got %T", result.Result)
+	}
+
+	// Check that scene state has expected fields
+	if _, ok := resultMap["shapes"]; !ok {
+		t.Error("Expected 'shapes' field in scene state")
+	}
+	if _, ok := resultMap["lights"]; !ok {
+		t.Error("Expected 'lights' field in scene state")
+	}
+	if _, ok := resultMap["camera"]; !ok {
+		t.Error("Expected 'camera' field in scene state")
+	}
+
+	// Check that SceneState was populated in the request
+	if req.SceneState == nil {
+		t.Error("Expected SceneState to be populated in request")
+	}
+}
+
+func TestGetSceneStateWithShapesAndLights(t *testing.T) {
+	events := make(chan AgentEvent, 100)
+	agent := NewWithMockLLM(events, &MockLLMClient{})
+
+	// Add a shape
+	shape := ShapeRequest{
+		ID:   "test_sphere",
+		Type: "sphere",
+		Properties: map[string]interface{}{
+			"center": []interface{}{0.0, 1.0, 0.0},
+			"radius": 1.0,
+			"material": map[string]interface{}{
+				"type":   "lambertian",
+				"albedo": []interface{}{0.8, 0.1, 0.1},
+			},
+		},
+	}
+	err := agent.sceneManager.AddShapes([]ShapeRequest{shape})
+	if err != nil {
+		t.Fatalf("Failed to add shape: %v", err)
+	}
+
+	// Add a light
+	light := LightRequest{
+		ID:   "test_light",
+		Type: "point_spot_light",
+		Properties: map[string]interface{}{
+			"center":   []interface{}{5.0, 5.0, 5.0},
+			"emission": []interface{}{10.0, 10.0, 10.0},
+		},
+	}
+	err = agent.sceneManager.AddLights([]LightRequest{light})
+	if err != nil {
+		t.Fatalf("Failed to add light: %v", err)
+	}
+
+	// Get scene state
+	req := &GetSceneStateRequest{
+		BaseToolRequest: BaseToolRequest{ToolType: "get_scene_state"},
+	}
+
+	result := agent.executeToolRequests(req)
+
+	if !result.Success {
+		t.Fatalf("Expected success, got errors: %v", result.Errors)
+	}
+
+	resultMap, ok := result.Result.(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected result to be map[string]interface{}, got %T", result.Result)
+	}
+
+	// Check shapes
+	shapes, ok := resultMap["shapes"].([]ShapeRequest)
+	if !ok {
+		t.Fatalf("Expected shapes to be []ShapeRequest, got %T", resultMap["shapes"])
+	}
+	if len(shapes) != 1 {
+		t.Errorf("Expected 1 shape, got %d", len(shapes))
+	}
+	if len(shapes) > 0 && shapes[0].ID != "test_sphere" {
+		t.Errorf("Expected shape ID 'test_sphere', got %q", shapes[0].ID)
+	}
+
+	// Check lights
+	lights, ok := resultMap["lights"].([]LightRequest)
+	if !ok {
+		t.Fatalf("Expected lights to be []LightRequest, got %T", resultMap["lights"])
+	}
+	if len(lights) != 1 {
+		t.Errorf("Expected 1 light, got %d", len(lights))
+	}
+	if len(lights) > 0 && lights[0].ID != "test_light" {
+		t.Errorf("Expected light ID 'test_light', got %q", lights[0].ID)
+	}
+
+	// Check camera is present
+	_, ok = resultMap["camera"].(CameraInfo)
+	if !ok {
+		t.Errorf("Expected camera to be CameraInfo, got %T", resultMap["camera"])
+	}
+}
+
+func TestGetSceneStateToolParsing(t *testing.T) {
+	call := &genai.FunctionCall{
+		Name: "get_scene_state",
+		Args: map[string]any{},
+	}
+
+	req := parseToolRequestFromFunctionCall(call)
+	if req == nil {
+		t.Fatal("Expected non-nil request")
+	}
+
+	getSceneReq, ok := req.(*GetSceneStateRequest)
+	if !ok {
+		t.Fatalf("Expected *GetSceneStateRequest, got %T", req)
+	}
+
+	if getSceneReq.ToolName() != "get_scene_state" {
+		t.Errorf("Expected tool name 'get_scene_state', got %q", getSceneReq.ToolName())
+	}
+}

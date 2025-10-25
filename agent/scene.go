@@ -116,6 +116,7 @@ func (sm *SceneManager) GetState() *SceneState {
 	// Return a deep copy to prevent external mutation
 	stateCopy := &SceneState{
 		Shapes: make([]ShapeRequest, len(sm.state.Shapes)),
+		Lights: make([]LightRequest, len(sm.state.Lights)),
 		Camera: sm.state.Camera,
 	}
 
@@ -135,7 +136,32 @@ func (sm *SceneManager) GetState() *SceneState {
 		}
 	}
 
+	// Deep copy each light including its properties map
+	for i, light := range sm.state.Lights {
+		stateCopy.Lights[i] = LightRequest{
+			ID:         light.ID,
+			Type:       light.Type,
+			Properties: make(map[string]interface{}),
+		}
+
+		// Deep copy the properties map
+		if light.Properties != nil {
+			for key, value := range light.Properties {
+				stateCopy.Lights[i].Properties[key] = value
+			}
+		}
+	}
+
 	return stateCopy
+}
+
+// GetSceneState returns the complete scene state as a JSON-friendly map
+func (sm *SceneManager) GetSceneState() map[string]interface{} {
+	return map[string]interface{}{
+		"shapes": sm.state.Shapes,
+		"lights": sm.state.Lights,
+		"camera": sm.state.Camera,
+	}
 }
 
 // BuildContext creates a context string describing the current scene state

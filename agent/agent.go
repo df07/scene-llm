@@ -352,6 +352,15 @@ func (a *Agent) executeToolRequests(operation ToolRequest) ToolResult {
 			"height":            raytracerScene.SamplingConfig.Height,
 			"render_time_ms":    time.Since(startTime).Milliseconds(),
 		}
+	case *GetSceneStateRequest:
+		// Get the complete scene state as JSON
+		sceneState := a.sceneManager.GetSceneState()
+
+		// Store in request for potential use
+		op.SceneState = sceneState
+
+		// Return the scene state
+		result = sceneState
 	}
 
 	// Calculate duration
