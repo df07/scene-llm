@@ -866,6 +866,74 @@ func (sm *SceneManager) ToRaytracerScene() (*scene.Scene, error) {
 				radius,
 				shapeMaterial,
 			)
+		case "cylinder":
+			// Extract base_center, top_center, radius, and capped
+			var baseCenter, topCenter [3]float64
+			var radius float64
+			var capped bool
+
+			if baseCenterArray, ok := extractFloatArray(shapeReq.Properties, "base_center", 3); ok {
+				copy(baseCenter[:], baseCenterArray)
+			}
+
+			if topCenterArray, ok := extractFloatArray(shapeReq.Properties, "top_center", 3); ok {
+				copy(topCenter[:], topCenterArray)
+			}
+
+			if r, ok := extractFloat(shapeReq.Properties, "radius"); ok {
+				radius = r
+			}
+
+			if c, ok := shapeReq.Properties["capped"].(bool); ok {
+				capped = c
+			}
+
+			shape = geometry.NewCylinder(
+				core.NewVec3(baseCenter[0], baseCenter[1], baseCenter[2]),
+				core.NewVec3(topCenter[0], topCenter[1], topCenter[2]),
+				radius,
+				capped,
+				shapeMaterial,
+			)
+		case "cone":
+			// Extract base_center, base_radius, top_center, top_radius, and capped
+			var baseCenter, topCenter [3]float64
+			var baseRadius, topRadius float64
+			var capped bool
+
+			if baseCenterArray, ok := extractFloatArray(shapeReq.Properties, "base_center", 3); ok {
+				copy(baseCenter[:], baseCenterArray)
+			}
+
+			if topCenterArray, ok := extractFloatArray(shapeReq.Properties, "top_center", 3); ok {
+				copy(topCenter[:], topCenterArray)
+			}
+
+			if br, ok := extractFloat(shapeReq.Properties, "base_radius"); ok {
+				baseRadius = br
+			}
+
+			if tr, ok := extractFloat(shapeReq.Properties, "top_radius"); ok {
+				topRadius = tr
+			}
+
+			if c, ok := shapeReq.Properties["capped"].(bool); ok {
+				capped = c
+			}
+
+			// NewCone returns (cone, error), so we need to handle the error
+			coneShape, err := geometry.NewCone(
+				core.NewVec3(baseCenter[0], baseCenter[1], baseCenter[2]),
+				baseRadius,
+				core.NewVec3(topCenter[0], topCenter[1], topCenter[2]),
+				topRadius,
+				capped,
+				shapeMaterial,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create cone '%s': %w", shapeReq.ID, err)
+			}
+			shape = coneShape
 		default:
 			return nil, fmt.Errorf("unsupported shape type: %s", shapeReq.Type)
 		}

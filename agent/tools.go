@@ -131,12 +131,12 @@ func createShapeToolDeclaration() *genai.FunctionDeclaration {
 				},
 				"type": {
 					Type:        genai.TypeString,
-					Enum:        []string{"sphere", "box", "quad", "disc"},
+					Enum:        []string{"sphere", "box", "quad", "disc", "cylinder", "cone"},
 					Description: "The type of shape to create",
 				},
 				"properties": {
 					Type:        genai.TypeObject,
-					Description: "Shape-specific properties including optional material. For sphere: {center: [x,y,z], radius: number, material?: {...}}. For box: {center: [x,y,z], dimensions: [w,h,d], rotation?: [x,y,z], material?: {...}}. For quad: {corner: [x,y,z], u: [x,y,z], v: [x,y,z], material?: {...}}. For disc: {center: [x,y,z], normal: [x,y,z], radius: number, material?: {...}}. Material defaults to gray lambertian if not specified. Materials: Lambertian {type: 'lambertian', albedo: [r,g,b]}, Metal {type: 'metal', albedo: [r,g,b], fuzz: 0.0-1.0}, Dielectric {type: 'dielectric', refractive_index: number (1.0=air, 1.33=water, 1.5=glass, 2.4=diamond)}",
+					Description: "Shape-specific properties including optional material. For sphere: {center: [x,y,z], radius: number, material?: {...}}. For box: {center: [x,y,z], dimensions: [w,h,d], rotation?: [x,y,z], material?: {...}}. For quad: {corner: [x,y,z], u: [x,y,z], v: [x,y,z], material?: {...}}. For disc: {center: [x,y,z], normal: [x,y,z], radius: number, material?: {...}}. For cylinder: {base_center: [x,y,z], top_center: [x,y,z], radius: number, capped: bool, material?: {...}}. For cone: {base_center: [x,y,z], base_radius: number, top_center: [x,y,z], top_radius: number (0 for pointed cone, >0 for frustum), capped: bool, material?: {...}}. Material defaults to gray lambertian if not specified. Materials: Lambertian {type: 'lambertian', albedo: [r,g,b]}, Metal {type: 'metal', albedo: [r,g,b], fuzz: 0.0-1.0}, Dielectric {type: 'dielectric', refractive_index: number (1.0=air, 1.33=water, 1.5=glass, 2.4=diamond)}",
 				},
 			},
 			Required: []string{"id", "type", "properties"},

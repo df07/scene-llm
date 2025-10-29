@@ -51,6 +51,28 @@ func validateShapeProperties(shape ShapeRequest) error {
 		validateVec3PropertyRequired(&errors, shape.Properties, "normal", nil, nil, "disc", shape.ID)
 		validatePositiveFloatRequired(&errors, shape.Properties, "radius", "disc", shape.ID)
 
+	case "cylinder":
+		validateVec3PropertyRequired(&errors, shape.Properties, "base_center", nil, nil, "cylinder", shape.ID)
+		validateVec3PropertyRequired(&errors, shape.Properties, "top_center", nil, nil, "cylinder", shape.ID)
+		validatePositiveFloatRequired(&errors, shape.Properties, "radius", "cylinder", shape.ID)
+		validateBoolPropertyRequired(&errors, shape.Properties, "capped", "cylinder", shape.ID)
+
+	case "cone":
+		validateVec3PropertyRequired(&errors, shape.Properties, "base_center", nil, nil, "cone", shape.ID)
+		validateVec3PropertyRequired(&errors, shape.Properties, "top_center", nil, nil, "cone", shape.ID)
+		validatePositiveFloatRequired(&errors, shape.Properties, "base_radius", "cone", shape.ID)
+		validateNonNegativeFloatRequired(&errors, shape.Properties, "top_radius", "cone", shape.ID)
+		validateBoolPropertyRequired(&errors, shape.Properties, "capped", "cone", shape.ID)
+
+		// Validate that base_radius > top_radius (cone constraint)
+		if baseRadius, ok := extractFloat(shape.Properties, "base_radius"); ok {
+			if topRadius, ok := extractFloat(shape.Properties, "top_radius"); ok {
+				if baseRadius <= topRadius {
+					errors = append(errors, fmt.Sprintf("cone '%s' base_radius (%.2f) must be greater than top_radius (%.2f)", shape.ID, baseRadius, topRadius))
+				}
+			}
+		}
+
 	case "":
 		// Already handled above
 	default:
@@ -293,6 +315,38 @@ func validatePositiveFloatRequired(errors *ValidationErrors, properties map[stri
 
 	if val <= 0 {
 		*errors = append(*errors, fmt.Sprintf("%s '%s' %s must be positive", objType, objID, key))
+	}
+}
+
+// validateNonNegativeFloatRequired validates a required non-negative float property (>= 0)
+func validateNonNegativeFloatRequired(errors *ValidationErrors, properties map[string]interface{}, key string, objType, objID string) {
+	if !hasProperty(properties, key) {
+		*errors = append(*errors, fmt.Sprintf("%s '%s' requires '%s' property", objType, objID, key))
+		return
+	}
+
+	val, ok := properties[key].(float64)
+	if !ok {
+		*errors = append(*errors, fmt.Sprintf("%s '%s' %s must be a number", objType, objID, key))
+		return
+	}
+
+	if val < 0 {
+		*errors = append(*errors, fmt.Sprintf("%s '%s' %s must be non-negative", objType, objID, key))
+	}
+}
+
+// validateBoolPropertyRequired validates a required boolean property
+func validateBoolPropertyRequired(errors *ValidationErrors, properties map[string]interface{}, key string, objType, objID string) {
+	if !hasProperty(properties, key) {
+		*errors = append(*errors, fmt.Sprintf("%s '%s' requires '%s' property", objType, objID, key))
+		return
+	}
+
+	_, ok := properties[key].(bool)
+	if !ok {
+		*errors = append(*errors, fmt.Sprintf("%s '%s' %s must be a boolean", objType, objID, key))
+		return
 	}
 }
 

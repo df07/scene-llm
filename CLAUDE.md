@@ -60,7 +60,10 @@ go test ./...
   - `get_scene_state` returns complete scene state as JSON (shapes, lights, camera) when LLM needs to check current state
 
 ### Supported Shapes & Materials
-**Shapes**: sphere, box, quad, disc
+**Shapes**: sphere, box, quad, disc, cylinder, cone
+- **cylinder**: Requires `base_center`, `top_center`, `radius`, `capped` (bool). Can be oriented in any direction.
+- **cone**: Requires `base_center`, `base_radius`, `top_center`, `top_radius`, `capped` (bool). Set `top_radius` to 0 for pointed cone, >0 for frustum (truncated cone). Constraint: `base_radius` must be > `top_radius`.
+
 **Materials**: lambertian (diffuse), metal (reflective), dielectric (glass/transparent)
 **Lights**: point_spot, area_quad, disc_spot, area_sphere, area_disc_spot, infinite environment lights
 
