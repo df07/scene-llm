@@ -614,3 +614,38 @@ body {
     font-size: 12px;
     overflow-x: auto;
 }
+
+/* Persistent processing message in conversation */
+.message.processing-persistent {
+    position: sticky;
+    bottom: 0;
+    background-color: var(--bg-primary);
+    z-index: 10;
+    margin-top: 8px;
+}
+
+.message.processing-persistent .message-content {
+    background-color: var(--message-processing-bg);
+    color: var(--message-processing-text);
+    border: 2px solid var(--message-processing-text);
+    font-weight: 500;
+    animation: processing 1.5s infinite;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.processing-spinner {
+    width: 16px;
+    height: 16px;
+    border: 3px solid var(--message-processing-text);
+    border-top-color: transparent;
+    border-radius: 50%;
+    display: inline-block;
+    animation: spinner-rotate 0.8s linear infinite;
+}
+
+@keyframes spinner-rotate {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}

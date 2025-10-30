@@ -224,7 +224,7 @@ class SceneLLMChat {
                 this.updateProcessingMessage(event.data);
                 break;
             case 'llm_response':
-                this.removeProcessingMessage();
+                // Don't remove processing indicator - wait for 'complete' event
                 // Check if this is a thinking token
                 const isThought = event.data.thought === true;
                 let text = event.data.text;
@@ -304,7 +304,13 @@ class SceneLLMChat {
             welcomeMessage.remove();
         }
 
-        this.messagesContainer.appendChild(messageDiv);
+        // Insert before processing message if it exists, otherwise append normally
+        const processingMessage = document.getElementById('processing-message');
+        if (processingMessage) {
+            this.messagesContainer.insertBefore(messageDiv, processingMessage);
+        } else {
+            this.messagesContainer.appendChild(messageDiv);
+        }
         this.scrollToBottom();
     }
 
@@ -312,13 +318,21 @@ class SceneLLMChat {
         this.removeProcessingMessage(); // Remove any existing processing message
 
         const messageDiv = document.createElement('div');
-        messageDiv.className = 'message assistant processing';
+        messageDiv.className = 'message assistant processing-persistent';
         messageDiv.id = 'processing-message';
 
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
-        contentDiv.textContent = '🤖 Processing...';
 
+        const spinner = document.createElement('span');
+        spinner.className = 'processing-spinner';
+
+        const text = document.createElement('span');
+        text.className = 'processing-text';
+        text.textContent = 'Processing...';
+
+        contentDiv.appendChild(spinner);
+        contentDiv.appendChild(text);
         messageDiv.appendChild(contentDiv);
         this.messagesContainer.appendChild(messageDiv);
         this.scrollToBottom();
@@ -327,8 +341,10 @@ class SceneLLMChat {
     updateProcessingMessage(text) {
         const processingMessage = document.getElementById('processing-message');
         if (processingMessage) {
-            const content = processingMessage.querySelector('.message-content');
-            content.textContent = text;
+            const textSpan = processingMessage.querySelector('.processing-text');
+            if (textSpan) {
+                textSpan.textContent = text;
+            }
         }
     }
 
