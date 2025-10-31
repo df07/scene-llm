@@ -357,9 +357,13 @@ class SceneLLMChat {
 
     formatMessageContent(content) {
         // Basic text formatting
-        return content
+        // First trim trailing newlines, then convert remaining newlines to <br>
+        const formatted = content
+            .replace(/\n+$/g, '') // Remove trailing newlines
             .replace(/\n/g, '<br>')
             .replace(/`([^`]+)`/g, '<code>$1</code>');
+
+        return formatted;
     }
 
 
@@ -411,8 +415,50 @@ class SceneLLMChat {
 
         container.appendChild(summaryDiv);
 
-        // Add as an assistant message
-        this.addMessage('assistant', container);
+        // Get or create a tool calls group message
+        this.addToToolCallsGroup(container);
+    }
+
+    getOrCreateToolCallsGroup() {
+        // Check if the last message is a tool calls group
+        let lastMessage = null;
+        const processingMessage = document.getElementById('processing-message');
+
+        if (processingMessage && processingMessage.previousElementSibling) {
+            lastMessage = processingMessage.previousElementSibling;
+        } else {
+            // No processing message, get actual last child
+            lastMessage = this.messagesContainer.lastElementChild;
+        }
+
+        // If last message is a tool calls group, reuse it
+        if (lastMessage && lastMessage.classList.contains('tool-calls-group')) {
+            return lastMessage.querySelector('.message-content');
+        }
+
+        // Otherwise create a new tool calls group message
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message assistant tool-calls-group';
+
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
+
+        messageDiv.appendChild(contentDiv);
+
+        // Insert before processing message if it exists
+        if (processingMessage) {
+            this.messagesContainer.insertBefore(messageDiv, processingMessage);
+        } else {
+            this.messagesContainer.appendChild(messageDiv);
+        }
+
+        return contentDiv;
+    }
+
+    addToToolCallsGroup(toolCallElement) {
+        const groupContent = this.getOrCreateToolCallsGroup();
+        groupContent.appendChild(toolCallElement);
+        this.scrollToBottom();
     }
 
     handleFunctionCalls(toolCallEvent) {
@@ -430,7 +476,7 @@ class SceneLLMChat {
             existingContainer.replaceWith(toolCallDiv);
         } else {
             // If no matching start event (shouldn't happen, but be defensive)
-            this.addMessage('assistant', toolCallDiv);
+            this.addToToolCallsGroup(toolCallDiv);
         }
     }
 
