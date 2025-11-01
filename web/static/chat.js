@@ -155,7 +155,7 @@ class SceneLLMChat {
         if (!message || this.isProcessing) return;
 
         this.isProcessing = true;
-        this.updateSendButton(false);
+        this.updateInputState(false);
 
         // Clear input immediately
         this.messageInput.value = '';
@@ -201,19 +201,20 @@ class SceneLLMChat {
 
             // Show processing indicator
             this.addProcessingMessage();
+            // Keep isProcessing true - will be cleared by complete/error events
 
         } catch (error) {
             console.error('Failed to send message:', error);
             this.addMessage('system', `Error: ${error.message}`);
-        } finally {
             this.isProcessing = false;
-            this.updateSendButton(true);
+            this.updateInputState(true);
         }
     }
 
-    updateSendButton(enabled) {
+    updateInputState(enabled) {
+        this.messageInput.disabled = !enabled;
         this.sendButton.disabled = !enabled;
-        this.sendButton.textContent = enabled ? 'Send' : 'Sending...';
+        this.sendButton.textContent = enabled ? 'Send' : 'Processing...';
     }
 
     handleSSEEvent(event) {
@@ -247,6 +248,8 @@ class SceneLLMChat {
                 break;
             case 'error':
                 this.removeProcessingMessage();
+                this.isProcessing = false;
+                this.updateInputState(true);
 
                 // Handle session not found - stop reconnection loop
                 if (event.data === 'Session not found') {
@@ -264,6 +267,8 @@ class SceneLLMChat {
                 break;
             case 'complete':
                 this.removeProcessingMessage();
+                this.isProcessing = false;
+                this.updateInputState(true);
                 break;
             case 'ping':
                 // Keep-alive, ignore
