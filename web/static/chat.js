@@ -45,6 +45,7 @@ class SceneLLMChat {
         this.messagesContainer = document.getElementById('messagesContainer');
         this.messageInput = document.getElementById('messageInput');
         this.sendButton = document.getElementById('sendButton');
+        this.stopButton = document.getElementById('stopButton');
         this.chatForm = document.getElementById('chatForm');
         this.connectionStatus = document.getElementById('connectionStatus');
         this.statusIndicator = document.getElementById('statusIndicator');
@@ -71,6 +72,7 @@ class SceneLLMChat {
 
     attachEventListeners() {
         this.chatForm.addEventListener('submit', (e) => this.handleSubmit(e));
+        this.stopButton.addEventListener('click', () => this.handleStop());
         this.clearChatButton.addEventListener('click', () => this.clearChat());
 
         // Add theme toggle handlers
@@ -215,6 +217,33 @@ class SceneLLMChat {
         this.messageInput.disabled = !enabled;
         this.sendButton.disabled = !enabled;
         this.sendButton.textContent = enabled ? 'Send' : 'Processing...';
+        // Show stop button when processing, hide when not
+        this.stopButton.style.display = enabled ? 'none' : 'inline-block';
+    }
+
+    async handleStop() {
+        if (!this.sessionId) return;
+
+        try {
+            const response = await fetch('/api/chat/interrupt', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    session_id: this.sessionId
+                })
+            });
+
+            const data = await response.json();
+            console.log('Interrupt response:', data);
+
+            if (!response.ok) {
+                console.error('Failed to interrupt:', data.error);
+            }
+        } catch (error) {
+            console.error('Failed to send interrupt request:', error);
+        }
     }
 
     handleSSEEvent(event) {

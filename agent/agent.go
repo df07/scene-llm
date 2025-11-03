@@ -3,6 +3,7 @@ package agent
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"image/png"
 	"log"
@@ -95,6 +96,10 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Conten
 		})
 		if err != nil {
 			log.Printf("Failed to generate content: %v", err)
+			// Check if this is a context cancellation (user interrupt)
+			if errors.Is(err, context.Canceled) {
+				return context.Canceled
+			}
 			a.events <- NewErrorEvent(fmt.Errorf("LLM generation failed: %w", err))
 			return err
 		}

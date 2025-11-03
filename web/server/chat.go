@@ -6,10 +6,12 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image/png"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/df07/go-progressive-raytracer/pkg/integrator"
@@ -21,9 +23,11 @@ import (
 
 // ChatSession represents an ongoing conversation with persistent agent state
 type ChatSession struct {
-	ID       string           `json:"id"`
-	Messages []*genai.Content `json:"messages"`
-	Agent    *agent.Agent     `json:"-"` // Agent with persistent SceneManager
+	ID       string             `json:"id"`
+	Messages []*genai.Content   `json:"messages"`
+	Agent    *agent.Agent       `json:"-"` // Agent with persistent SceneManager
+	cancel   context.CancelFunc // Function to cancel ongoing processing
+	mutex    sync.Mutex         // Protects cancel function
 }
 
 // ChatMessage represents a chat message request
@@ -288,11 +292,31 @@ func (s *Server) processMessage(session *ChatSession, message string, quality ag
 	// Set the events channel for this message processing
 	ag.SetEventsChannel(agentEvents)
 
+	// Create a cancellable context for this processing
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Store the cancel function in the session
+	session.mutex.Lock()
+	session.cancel = cancel
+	session.mutex.Unlock()
+
 	// Start agent processing in goroutine
 	// Note: Agent maintains its scene state across messages
 	go func() {
-		if err := ag.ProcessMessage(context.Background(), session.Messages); err != nil {
-			agentEvents <- agent.NewErrorEvent(err)
+		defer func() {
+			// Clear the cancel function when processing completes
+			session.mutex.Lock()
+			session.cancel = nil
+			session.mutex.Unlock()
+		}()
+
+		if err := ag.ProcessMessage(ctx, session.Messages); err != nil {
+			// Check if the error is due to cancellation
+			if errors.Is(err, context.Canceled) {
+				agentEvents <- agent.NewErrorEvent(fmt.Errorf("processing interrupted by user"))
+			} else {
+				agentEvents <- agent.NewErrorEvent(err)
+			}
 		}
 		close(agentEvents)
 	}()
@@ -392,6 +416,62 @@ func (s *Server) renderAndBroadcastScene(sessionID string, raytracerScene *scene
 	})
 
 	log.Printf("Scene rendered for session %s - %d shapes", sessionID, len(raytracerScene.Shapes))
+}
+
+// InterruptRequest represents a request to interrupt LLM processing
+type InterruptRequest struct {
+	SessionID string `json:"session_id"`
+}
+
+// handleInterrupt handles requests to interrupt ongoing LLM processing
+func (s *Server) handleInterrupt(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Method not allowed"})
+		return
+	}
+
+	// Parse request
+	var interruptReq InterruptRequest
+	if err := json.NewDecoder(r.Body).Decode(&interruptReq); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request body"})
+		return
+	}
+
+	if interruptReq.SessionID == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "session_id is required"})
+		return
+	}
+
+	// Find session
+	s.mutex.RLock()
+	session, exists := s.sessions[interruptReq.SessionID]
+	s.mutex.RUnlock()
+
+	if !exists {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Session not found"})
+		return
+	}
+
+	// Cancel ongoing processing if any
+	session.mutex.Lock()
+	if session.cancel != nil {
+		session.cancel()
+		session.mutex.Unlock()
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"status": "interrupted"})
+		return
+	}
+	session.mutex.Unlock()
+
+	// No processing to cancel
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "not_processing"})
 }
 
 // RenderRequest represents a request to re-render the scene

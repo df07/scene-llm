@@ -453,6 +453,15 @@ body {
     background-color: var(--accent-blue-hover);
 }
 
+.chat-form button.stop-button {
+    background-color: #dc3545;
+    margin-left: 10px;
+}
+
+.chat-form button.stop-button:hover {
+    background-color: #c82333;
+}
+
 .chat-form button:disabled {
     background-color: var(--accent-gray);
     cursor: not-allowed;

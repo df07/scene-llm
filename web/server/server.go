@@ -36,6 +36,7 @@ func (s *Server) Start() error {
 	http.HandleFunc("/api/health", s.handleHealth)
 	http.HandleFunc("/api/chat", s.handleChat)
 	http.HandleFunc("/api/chat/stream", s.handleChatStream)
+	http.HandleFunc("/api/chat/interrupt", s.handleInterrupt)
 	http.HandleFunc("/api/render", s.handleRender)
 
 	// Validate API key by attempting to create an agent
