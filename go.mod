@@ -5,10 +5,14 @@ go 1.24.3
 replace github.com/df07/go-progressive-raytracer => ../go-progressive-raytracer
 
 require (
+	github.com/df07/go-progressive-raytracer v0.0.0-20251028233309-c125732e0a88
+	google.golang.org/genai v1.25.0
+)
+
+require (
 	cloud.google.com/go v0.116.0 // indirect
 	cloud.google.com/go/auth v0.9.3 // indirect
 	cloud.google.com/go/compute/metadata v0.5.0 // indirect
-	github.com/df07/go-progressive-raytracer v0.0.0-20250919010329-7fb3a3fa9715 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/s2a-go v0.1.8 // indirect
@@ -19,7 +23,6 @@ require (
 	golang.org/x/net v0.29.0 // indirect
 	golang.org/x/sys v0.25.0 // indirect
 	golang.org/x/text v0.18.0 // indirect
-	google.golang.org/genai v1.25.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1 // indirect
 	google.golang.org/grpc v1.66.2 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect

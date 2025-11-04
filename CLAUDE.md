@@ -19,6 +19,9 @@ cd web && air
 
 # Run tests
 go test ./...
+
+# Update raytracer dependency after changes in go-progressive-raytracer
+go get github.com/df07/go-progressive-raytracer@latest && go mod tidy
 ```
 
 ## Testing Guidelines
