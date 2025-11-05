@@ -371,6 +371,14 @@ func (s *Server) renderAndBroadcastScene(sessionID string, raytracerScene *scene
 		return // No shapes to render
 	}
 
+	// Broadcast render start event
+	s.broadcastToSession(sessionID, SSEChatEvent{
+		Type: "render_start",
+		Data: map[string]interface{}{
+			"quality": string(quality),
+		},
+	})
+
 	// Render the scene with appropriate config based on quality
 	config := renderer.DefaultProgressiveConfig()
 	config.MaxPasses = 1

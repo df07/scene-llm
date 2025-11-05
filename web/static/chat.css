@@ -494,6 +494,25 @@ body {
     object-fit: contain;
     border-radius: 8px;
     box-shadow: var(--shadow-medium);
+    transition: opacity 0.3s ease;
+}
+
+.scene-image.rendering {
+    opacity: 0.4;
+}
+
+.scene-preview.rendering::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="20" fill="none" stroke="%234dabf7" stroke-width="4"><animate attributeName="r" from="20" to="40" dur="1s" repeatCount="indefinite"/><animate attributeName="opacity" from="1" to="0" dur="1s" repeatCount="indefinite"/></circle></svg>') center/60px 60px no-repeat;
 }
 
 .scene-loading {

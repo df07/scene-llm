@@ -266,6 +266,9 @@ class SceneLLMChat {
 
                 this.addMessage('assistant', text, isThought);
                 break;
+            case 'render_start':
+                this.handleRenderStart(event.data);
+                break;
             case 'scene_update':
                 this.handleSceneUpdate(event.data);
                 break;
@@ -401,6 +404,27 @@ class SceneLLMChat {
     }
 
 
+    showRenderingIndicator() {
+        const existingImage = this.scenePreview.querySelector('.scene-image');
+        if (existingImage) {
+            existingImage.classList.add('rendering');
+        }
+        this.scenePreview.classList.add('rendering');
+    }
+
+    hideRenderingIndicator() {
+        const existingImage = this.scenePreview.querySelector('.scene-image');
+        if (existingImage) {
+            existingImage.classList.remove('rendering');
+        }
+        this.scenePreview.classList.remove('rendering');
+    }
+
+    handleRenderStart(data) {
+        console.log('Render started:', data);
+        this.showRenderingIndicator();
+    }
+
     handleSceneUpdate(data) {
         console.log('Scene update received:', { quality: data.quality, shape_count: data.shape_count });
         if (data.image_base64) {
@@ -413,6 +437,8 @@ class SceneLLMChat {
         if (!this.sessionId || !this.isConnected) {
             return;
         }
+
+        this.showRenderingIndicator();
 
         try {
             // Request a scene re-render with the current quality setting
@@ -429,9 +455,11 @@ class SceneLLMChat {
 
             if (!response.ok) {
                 console.error('Failed to trigger re-render:', response.status);
+                this.hideRenderingIndicator();
             }
         } catch (error) {
             console.error('Failed to trigger scene re-render:', error);
+            this.hideRenderingIndicator();
         }
     }
 
@@ -690,6 +718,9 @@ class SceneLLMChat {
         // Remove loading indicator
         const loading = this.scenePreview.querySelector('.scene-loading');
         if (loading) loading.remove();
+
+        // Hide rendering indicator
+        this.hideRenderingIndicator();
 
         // Remove existing image
         const existingImage = this.scenePreview.querySelector('.scene-image');
