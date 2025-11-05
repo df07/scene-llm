@@ -267,7 +267,10 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-ctx.Done():
 			return
-		case event := <-clientChan:
+		case event, ok := <-clientChan:
+			if !ok {
+				return // Channel closed
+			}
 			if err := s.sendSSEEvent(w, event.Type, event.Data); err != nil {
 				return // Connection closed
 			}
