@@ -215,9 +215,8 @@ class SceneLLMChat {
 
     updateInputState(enabled) {
         this.messageInput.disabled = !enabled;
-        this.sendButton.disabled = !enabled;
-        this.sendButton.textContent = enabled ? 'Send' : 'Processing...';
-        // Show stop button when processing, hide when not
+        // Hide send button when processing, show stop button instead
+        this.sendButton.style.display = enabled ? 'inline-block' : 'none';
         this.stopButton.style.display = enabled ? 'none' : 'inline-block';
     }
 
