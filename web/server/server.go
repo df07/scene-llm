@@ -27,10 +27,21 @@ func NewServer(port int) *Server {
 	}
 }
 
+// noCacheMiddleware adds no-cache headers to prevent browser caching during development
+func noCacheMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+		next.ServeHTTP(w, r)
+	})
+}
+
 // Start starts the web server
 func (s *Server) Start() error {
-	// Serve static files
-	http.Handle("/", http.FileServer(http.Dir("static/")))
+	// Serve static files with no-cache headers for development
+	fs := http.FileServer(http.Dir("static/"))
+	http.Handle("/", noCacheMiddleware(fs))
 
 	// API endpoints
 	http.HandleFunc("/api/health", s.handleHealth)
