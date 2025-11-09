@@ -13,6 +13,10 @@ Quick reference for next features to implement.
 - Instance groups (create reusable object collections)
 - Copy/clone groups with transformations
 
+## Performance
+- LLM context caching (Gemini caches, Claude prompt caching)
+- Optimize long conversation histories
+
 ## Deployment
 - Public hosting with rate limiting
 - Quota management and usage tracking
