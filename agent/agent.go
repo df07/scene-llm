@@ -7,48 +7,27 @@ import (
 	"fmt"
 	"image/png"
 	"log"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/df07/go-progressive-raytracer/pkg/integrator"
 	"github.com/df07/go-progressive-raytracer/pkg/renderer"
-	"google.golang.org/genai"
+	"github.com/df07/scene-llm/agent/llm"
+	"github.com/df07/scene-llm/agent/llm/gemini"
 )
 
 // Agent handles LLM conversations and tool execution
 type Agent struct {
-	llmClient    LLMClient
+	provider     llm.LLMProvider // LLM provider interface
+	modelID      string          // Model ID (e.g., "gemini-2.5-flash")
 	events       chan<- AgentEvent
 	sceneManager *SceneManager
 }
 
-// New creates a new agent that will send events to the provided channel
-func New(events chan<- AgentEvent) (*Agent, error) {
-	apiKey := os.Getenv("GOOGLE_API_KEY")
-	if apiKey == "" {
-		return nil, fmt.Errorf("GOOGLE_API_KEY environment variable not set")
-	}
-
-	client, err := genai.NewClient(context.Background(), &genai.ClientConfig{
-		APIKey:  apiKey,
-		Backend: genai.BackendGeminiAPI,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Gemini client: %w", err)
-	}
-
+// NewWithProvider creates an agent using the new provider interface
+func NewWithProvider(events chan<- AgentEvent, provider llm.LLMProvider, modelID string) *Agent {
 	return &Agent{
-		llmClient:    &GeminiClient{client: client},
-		events:       events,
-		sceneManager: NewSceneManager(),
-	}, nil
-}
-
-// NewWithMockLLM creates an agent with a mock LLM client for testing
-func NewWithMockLLM(events chan<- AgentEvent, mockClient LLMClient) *Agent {
-	return &Agent{
-		llmClient:    mockClient,
+		provider:     provider,
+		modelID:      modelID,
 		events:       events,
 		sceneManager: NewSceneManager(),
 	}
@@ -65,7 +44,11 @@ func (a *Agent) GetSceneManager() *SceneManager {
 }
 
 // ProcessMessage handles a conversation with agentic loop and emits events
-func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Content) error {
+// Returns the updated conversation history including assistant responses and function calls
+func (a *Agent) ProcessMessage(ctx context.Context, conversation []llm.Message) ([]llm.Message, error) {
+	if a.provider == nil {
+		return nil, fmt.Errorf("agent has no provider - use NewWithProvider")
+	}
 	const maxTurns = 10
 
 	// Send processing event
@@ -74,11 +57,15 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Conten
 	// Build scene context from our internal scene manager
 	sceneContext := a.sceneManager.BuildContext()
 
-	// Add scene context to the latest message (only for initial user message)
-	contextualizedConversation := a.addSceneContext(conversation, sceneContext)
+	// Add scene context to the latest message
+	conversation = a.addSceneContext(conversation, sceneContext)
 
-	// Prepare tools
-	tools := []*genai.Tool{{FunctionDeclarations: getAllToolDeclarations()}}
+	// Get tool declarations (convert from genai format to internal format)
+	genaiTools := getAllToolDeclarations()
+	tools := gemini.ToInternalTools(genaiTools)
+
+	// Work with conversation directly (already in internal format)
+	messages := conversation
 
 	// Agentic loop
 	turnCount := 0
@@ -87,64 +74,61 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Conten
 		if turnCount >= maxTurns {
 			a.events <- NewResponseEvent(fmt.Sprintf("Reached maximum turn limit (%d turns). Send a message to continue.", maxTurns))
 			a.events <- NewCompleteEvent()
-			return nil
+			return messages, nil
 		}
 
-		// Generate content with function calling and retry logic
-		result, err := a.generateContentWithRetry(ctx, "gemini-2.5-flash", contextualizedConversation, &genai.GenerateContentConfig{
-			Tools: tools,
-		})
+		// Generate content using provider
+		response, err := a.provider.GenerateContent(ctx, a.modelID, messages, tools)
 		if err != nil {
 			log.Printf("Failed to generate content: %v", err)
-			// Check if this is a context cancellation (user interrupt)
+			// Check if this is a context cancellation
 			if errors.Is(err, context.Canceled) {
-				return context.Canceled
+				return messages, context.Canceled
 			}
 			a.events <- NewErrorEvent(fmt.Errorf("LLM generation failed: %w", err))
-			return err
+			return messages, err
 		}
 
-		// Process the response
-		if len(result.Candidates) == 0 || result.Candidates[0].Content == nil || len(result.Candidates[0].Content.Parts) == 0 {
+		// Check for empty response
+		if len(response.Parts) == 0 {
 			log.Printf("No response from LLM")
 			a.events <- NewErrorEvent(fmt.Errorf("no response from LLM"))
-			return fmt.Errorf("no response from LLM")
+			return messages, fmt.Errorf("no response from LLM")
 		}
 
-		var functionCalls []*genai.FunctionCall
+		var functionCalls []*llm.FunctionCall
 		var hasToolRequests bool
 
-		// Collect all parts from the response
-		for _, part := range result.Candidates[0].Content.Parts {
-			if part.FunctionCall != nil {
+		// Process response parts
+		for _, part := range response.Parts {
+			if part.Type == llm.PartTypeFunctionCall && part.FunctionCall != nil {
 				functionCalls = append(functionCalls, part.FunctionCall)
-			} else if part.Text != "" {
-				// Emit each text part as a separate response event
-				// Check if this is a thinking token - SDK doesn't always set Thought field,
-				// so we check both the field and the text content
-				isThought := part.Thought || strings.HasPrefix(strings.ToLower(strings.TrimSpace(part.Text)), "thought")
-				a.events <- ResponseEvent{Text: part.Text, Thought: isThought}
-			} else {
-				// Log unexpected part types
-				log.Printf("WARNING: Received unexpected part type from LLM (not FunctionCall or Text)")
+			} else if part.Type == llm.PartTypeText && part.Text != "" {
+				a.events <- ResponseEvent{Text: part.Text, Thought: part.Thought}
 			}
 		}
 
-		// If no tool calls, we're done (LLM signaled completion)
+		// Append assistant's response to conversation
+		messages = append(messages, llm.Message{
+			Role:  "assistant",
+			Parts: response.Parts,
+		})
+
+		// If no function calls, we're done
 		if len(functionCalls) == 0 {
 			break
 		}
 
-		// Execute tool calls and collect results
-		var functionResponses []*genai.Part
+		// Execute function calls and collect results
+		var functionResponses []llm.Part
 		for _, fc := range functionCalls {
 			operation := parseToolRequestFromFunctionCall(fc)
 			if operation != nil {
 				hasToolRequests = true
 				toolResult := a.executeToolRequests(operation)
 
-				// Convert ToolResult to map for FunctionResponse
-				resultMap := make(map[string]any)
+				// Convert result to internal format
+				resultMap := make(map[string]interface{})
 				if toolResult.Success {
 					resultMap["success"] = true
 					resultMap["result"] = toolResult.Result
@@ -153,18 +137,19 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Conten
 					resultMap["errors"] = toolResult.Errors
 				}
 
-				// Create function response for conversation history
-				functionResponses = append(functionResponses, &genai.Part{
-					FunctionResponse: &genai.FunctionResponse{
+				functionResponses = append(functionResponses, llm.Part{
+					Type: llm.PartTypeFunctionResponse,
+					FunctionResp: &llm.FunctionResponse{
 						Name:     fc.Name,
 						Response: resultMap,
 					},
 				})
 
-				// If this is a render_scene request with an image, add it as an InlineData part
+				// Handle render_scene image
 				if renderReq, ok := operation.(*RenderSceneRequest); ok && renderReq.RenderedImage != nil {
-					functionResponses = append(functionResponses, &genai.Part{
-						InlineData: &genai.Blob{
+					functionResponses = append(functionResponses, llm.Part{
+						Type: llm.PartTypeImage,
+						ImageData: &llm.ImageData{
 							Data:     renderReq.RenderedImage,
 							MIMEType: "image/png",
 						},
@@ -181,27 +166,23 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []*genai.Conten
 			} else {
 				a.events <- NewSceneRenderEvent(raytracerScene)
 			}
-			hasToolRequests = false // Reset for next iteration
+			hasToolRequests = false
 		}
 
-		// Append assistant's response to conversation
-		contextualizedConversation = append(contextualizedConversation, result.Candidates[0].Content)
-
-		// Append function responses to conversation
+		// Append function responses
 		if len(functionResponses) > 0 {
-			contextualizedConversation = append(contextualizedConversation, &genai.Content{
+			messages = append(messages, llm.Message{
 				Role:  "function",
 				Parts: functionResponses,
 			})
 		}
 
-		// Increment turn counter
 		turnCount++
 	}
 
 	// Send completion event
 	a.events <- NewCompleteEvent()
-	return nil
+	return messages, nil
 }
 
 // ToolResult represents the result of a tool execution
@@ -400,17 +381,17 @@ func (a *Agent) executeToolRequests(operation ToolRequest) ToolResult {
 }
 
 // addSceneContext prepends scene context to the latest user message
-func (a *Agent) addSceneContext(conversation []*genai.Content, sceneContext string) []*genai.Content {
+func (a *Agent) addSceneContext(conversation []llm.Message, sceneContext string) []llm.Message {
 	if len(conversation) == 0 {
 		return conversation
 	}
 
 	// Make a copy to avoid modifying the original
-	contextualizedConversation := make([]*genai.Content, len(conversation))
+	contextualizedConversation := make([]llm.Message, len(conversation))
 	copy(contextualizedConversation, conversation)
 
 	// Add context to the latest user message
-	lastMessage := contextualizedConversation[len(contextualizedConversation)-1]
+	lastMessage := &contextualizedConversation[len(contextualizedConversation)-1]
 	if lastMessage.Role == "user" && len(lastMessage.Parts) > 0 {
 		originalText := lastMessage.Parts[0].Text
 
@@ -449,59 +430,13 @@ USER REQUEST:
 		contextualText := fmt.Sprintf(systemPrompt, sceneContext, originalText)
 
 		// Create a new part with the contextualized text
-		lastMessage.Parts[0] = &genai.Part{Text: contextualText}
+		lastMessage.Parts[0] = llm.Part{Type: llm.PartTypeText, Text: contextualText}
 	}
 
 	return contextualizedConversation
 }
 
-// generateContentWithRetry wraps the GenerateContent call with retry logic for transient errors
-func (a *Agent) generateContentWithRetry(ctx context.Context, model string, conversation []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
-	const maxRetries = 3
-	const baseDelay = 1 * time.Second
-
-	var lastErr error
-
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		result, err := a.llmClient.GenerateContent(ctx, model, conversation, config)
-		if err == nil {
-			if attempt > 0 {
-				log.Printf("Gemini API call succeeded on attempt %d", attempt+1)
-			}
-			return result, nil
-		}
-
-		lastErr = err
-		errStr := strings.ToLower(err.Error())
-
-		// Check if this is a transient network error worth retrying
-		isRetryable := strings.Contains(errStr, "connection reset by peer") ||
-			strings.Contains(errStr, "connection refused") ||
-			strings.Contains(errStr, "timeout") ||
-			strings.Contains(errStr, "temporary failure") ||
-			strings.Contains(errStr, "network error")
-
-		if !isRetryable || attempt == maxRetries-1 {
-			// Don't retry for non-network errors or on final attempt
-			break
-		}
-
-		delay := baseDelay * time.Duration(1<<uint(attempt)) // Exponential backoff: 1s, 2s, 4s
-		log.Printf("Gemini API call failed (attempt %d/%d): %v. Retrying in %v...", attempt+1, maxRetries, err, delay)
-
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(delay):
-			// Continue to next retry
-		}
-	}
-
-	return nil, lastErr
-}
-
 // Close cleans up the agent resources
 func (a *Agent) Close() error {
-	// genai.Client doesn't have a Close method in this version
 	return nil
 }

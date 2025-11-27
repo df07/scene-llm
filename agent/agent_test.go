@@ -4,14 +4,77 @@ import (
 	"context"
 	"testing"
 
+	"github.com/df07/scene-llm/agent/llm"
+	"github.com/df07/scene-llm/agent/llm/gemini"
 	"google.golang.org/genai"
 )
+
+// MockProvider implements llm.LLMProvider for testing
+type MockProvider struct {
+	Responses []*genai.GenerateContentResponse
+	CallCount int
+}
+
+func (m *MockProvider) GenerateContent(ctx context.Context, model string, messages []llm.Message, tools []llm.Tool) (*llm.Response, error) {
+	if m.CallCount >= len(m.Responses) {
+		// Return empty response when we run out
+		return &llm.Response{
+			Parts: []llm.Part{{Type: llm.PartTypeText, Text: "Done"}},
+		}, nil
+	}
+
+	response := m.Responses[m.CallCount]
+	m.CallCount++
+
+	// Convert genai response to internal format
+	return gemini.ToInternalResponse(response)
+}
+
+func (m *MockProvider) ListModels() []llm.ModelInfo {
+	return []llm.ModelInfo{{ID: "mock-model", DisplayName: "Mock Model", Provider: "mock"}}
+}
+
+func (m *MockProvider) Name() string {
+	return "mock"
+}
+
+func (m *MockProvider) SupportsVision() bool {
+	return false
+}
+
+func (m *MockProvider) SupportsThinking() bool {
+	return false
+}
+
+// NewMockResponse creates a mock response with text and optional function calls
+func NewMockResponse(text string, functionCalls ...*genai.FunctionCall) *genai.GenerateContentResponse {
+	parts := []*genai.Part{}
+
+	if text != "" {
+		parts = append(parts, &genai.Part{Text: text})
+	}
+
+	for _, fc := range functionCalls {
+		parts = append(parts, &genai.Part{FunctionCall: fc})
+	}
+
+	return &genai.GenerateContentResponse{
+		Candidates: []*genai.Candidate{
+			{
+				Content: &genai.Content{
+					Role:  "model",
+					Parts: parts,
+				},
+			},
+		},
+	}
+}
 
 // TestAgenticLoopSingleTurn tests the loop terminates when LLM responds without tool calls
 func TestAgenticLoopSingleTurn(t *testing.T) {
 	events := make(chan AgentEvent, 100)
 
-	mockClient := &MockLLMClient{
+	mockProvider := &MockProvider{
 		Responses: []*genai.GenerateContentResponse{
 			// First response: create a shape
 			NewMockResponse("I'll create a red sphere for you.", &genai.FunctionCall{
@@ -34,23 +97,23 @@ func TestAgenticLoopSingleTurn(t *testing.T) {
 		},
 	}
 
-	agent := NewWithMockLLM(events, mockClient)
+	agent := NewWithProvider(events, mockProvider, "mock-model")
 
-	conversation := []*genai.Content{
+	conversation := []llm.Message{
 		{
 			Role:  "user",
-			Parts: []*genai.Part{{Text: "Create a red sphere"}},
+			Parts: []llm.Part{{Type: llm.PartTypeText, Text: "Create a red sphere"}},
 		},
 	}
 
-	err := agent.ProcessMessage(context.Background(), conversation)
+	_, err := agent.ProcessMessage(context.Background(), conversation)
 	if err != nil {
 		t.Fatalf("ProcessMessage failed: %v", err)
 	}
 
 	// Should have called LLM twice (once with tool call, once without)
-	if mockClient.CallCount != 2 {
-		t.Errorf("Expected 2 LLM calls, got %d", mockClient.CallCount)
+	if mockProvider.CallCount != 2 {
+		t.Errorf("Expected 2 LLM calls, got %d", mockProvider.CallCount)
 	}
 
 	// Check that scene has the shape
@@ -69,7 +132,7 @@ func TestAgenticLoopSingleTurn(t *testing.T) {
 func TestAgenticLoopMultiTurn(t *testing.T) {
 	events := make(chan AgentEvent, 100)
 
-	mockClient := &MockLLMClient{
+	mockProvider := &MockProvider{
 		Responses: []*genai.GenerateContentResponse{
 			// Turn 1: Create sphere
 			NewMockResponse("Creating sphere...", &genai.FunctionCall{
@@ -100,23 +163,23 @@ func TestAgenticLoopMultiTurn(t *testing.T) {
 		},
 	}
 
-	agent := NewWithMockLLM(events, mockClient)
+	agent := NewWithProvider(events, mockProvider, "mock-model")
 
-	conversation := []*genai.Content{
+	conversation := []llm.Message{
 		{
 			Role:  "user",
-			Parts: []*genai.Part{{Text: "Create a sphere and make it big"}},
+			Parts: []llm.Part{{Type: llm.PartTypeText, Text: "Create a sphere and make it big"}},
 		},
 	}
 
-	err := agent.ProcessMessage(context.Background(), conversation)
+	_, err := agent.ProcessMessage(context.Background(), conversation)
 	if err != nil {
 		t.Fatalf("ProcessMessage failed: %v", err)
 	}
 
 	// Should have called LLM 3 times
-	if mockClient.CallCount != 3 {
-		t.Errorf("Expected 3 LLM calls, got %d", mockClient.CallCount)
+	if mockProvider.CallCount != 3 {
+		t.Errorf("Expected 3 LLM calls, got %d", mockProvider.CallCount)
 	}
 
 	// Check final state
@@ -157,27 +220,27 @@ func TestAgenticLoopTurnLimit(t *testing.T) {
 		})
 	}
 
-	mockClient := &MockLLMClient{
+	mockProvider := &MockProvider{
 		Responses: responses,
 	}
 
-	agent := NewWithMockLLM(events, mockClient)
+	agent := NewWithProvider(events, mockProvider, "mock-model")
 
-	conversation := []*genai.Content{
+	conversation := []llm.Message{
 		{
 			Role:  "user",
-			Parts: []*genai.Part{{Text: "Create many spheres"}},
+			Parts: []llm.Part{{Type: llm.PartTypeText, Text: "Create many spheres"}},
 		},
 	}
 
-	err := agent.ProcessMessage(context.Background(), conversation)
+	_, err := agent.ProcessMessage(context.Background(), conversation)
 	if err != nil {
 		t.Fatalf("ProcessMessage failed: %v", err)
 	}
 
 	// Should stop at 10 turns
-	if mockClient.CallCount != 10 {
-		t.Errorf("Expected exactly 10 LLM calls (turn limit), got %d", mockClient.CallCount)
+	if mockProvider.CallCount != 10 {
+		t.Errorf("Expected exactly 10 LLM calls (turn limit), got %d", mockProvider.CallCount)
 	}
 
 	// Should have emitted a turn limit message
@@ -202,7 +265,7 @@ func TestAgenticLoopTurnLimit(t *testing.T) {
 func TestAgenticLoopErrorRecovery(t *testing.T) {
 	events := make(chan AgentEvent, 100)
 
-	mockClient := &MockLLMClient{
+	mockProvider := &MockProvider{
 		Responses: []*genai.GenerateContentResponse{
 			// Turn 1: Try to create sphere with missing property
 			NewMockResponse("Creating sphere...", &genai.FunctionCall{
@@ -232,23 +295,23 @@ func TestAgenticLoopErrorRecovery(t *testing.T) {
 		},
 	}
 
-	agent := NewWithMockLLM(events, mockClient)
+	agent := NewWithProvider(events, mockProvider, "mock-model")
 
-	conversation := []*genai.Content{
+	conversation := []llm.Message{
 		{
 			Role:  "user",
-			Parts: []*genai.Part{{Text: "Create a sphere"}},
+			Parts: []llm.Part{{Type: llm.PartTypeText, Text: "Create a sphere"}},
 		},
 	}
 
-	err := agent.ProcessMessage(context.Background(), conversation)
+	_, err := agent.ProcessMessage(context.Background(), conversation)
 	if err != nil {
 		t.Fatalf("ProcessMessage failed: %v", err)
 	}
 
 	// Should have called LLM 3 times
-	if mockClient.CallCount != 3 {
-		t.Errorf("Expected 3 LLM calls, got %d", mockClient.CallCount)
+	if mockProvider.CallCount != 3 {
+		t.Errorf("Expected 3 LLM calls, got %d", mockProvider.CallCount)
 	}
 
 	// Final scene should have the shape (after retry)
@@ -263,7 +326,7 @@ func TestAgenticLoopErrorRecovery(t *testing.T) {
 func TestAgenticLoopMixedSuccessFailure(t *testing.T) {
 	events := make(chan AgentEvent, 100)
 
-	mockClient := &MockLLMClient{
+	mockProvider := &MockProvider{
 		Responses: []*genai.GenerateContentResponse{
 			// Turn 1: Multiple tool calls - one succeeds, one fails
 			NewMockResponse("Creating two spheres...",
@@ -307,23 +370,23 @@ func TestAgenticLoopMixedSuccessFailure(t *testing.T) {
 		},
 	}
 
-	agent := NewWithMockLLM(events, mockClient)
+	agent := NewWithProvider(events, mockProvider, "mock-model")
 
-	conversation := []*genai.Content{
+	conversation := []llm.Message{
 		{
 			Role:  "user",
-			Parts: []*genai.Part{{Text: "Create two spheres"}},
+			Parts: []llm.Part{{Type: llm.PartTypeText, Text: "Create two spheres"}},
 		},
 	}
 
-	err := agent.ProcessMessage(context.Background(), conversation)
+	_, err := agent.ProcessMessage(context.Background(), conversation)
 	if err != nil {
 		t.Fatalf("ProcessMessage failed: %v", err)
 	}
 
 	// Should have called LLM 3 times
-	if mockClient.CallCount != 3 {
-		t.Errorf("Expected 3 LLM calls, got %d", mockClient.CallCount)
+	if mockProvider.CallCount != 3 {
+		t.Errorf("Expected 3 LLM calls, got %d", mockProvider.CallCount)
 	}
 
 	// Final scene should have both shapes (one from turn 1, one from turn 2)
@@ -347,7 +410,7 @@ func TestMultipleTextParts(t *testing.T) {
 	events := make(chan AgentEvent, 100)
 
 	// Create a response with multiple text parts manually
-	mockClient := &MockLLMClient{
+	mockProvider := &MockProvider{
 		Responses: []*genai.GenerateContentResponse{
 			{
 				Candidates: []*genai.Candidate{
@@ -366,16 +429,16 @@ func TestMultipleTextParts(t *testing.T) {
 		},
 	}
 
-	agent := NewWithMockLLM(events, mockClient)
+	agent := NewWithProvider(events, mockProvider, "mock-model")
 
-	conversation := []*genai.Content{
+	conversation := []llm.Message{
 		{
 			Role:  "user",
-			Parts: []*genai.Part{{Text: "Test multiple parts"}},
+			Parts: []llm.Part{{Type: llm.PartTypeText, Text: "Test multiple parts"}},
 		},
 	}
 
-	err := agent.ProcessMessage(context.Background(), conversation)
+	_, err := agent.ProcessMessage(context.Background(), conversation)
 	if err != nil {
 		t.Fatalf("ProcessMessage failed: %v", err)
 	}
@@ -418,7 +481,7 @@ func TestMultipleTextParts(t *testing.T) {
 
 func TestRenderSceneEmptyScene(t *testing.T) {
 	events := make(chan AgentEvent, 100)
-	agent := NewWithMockLLM(events, &MockLLMClient{})
+	agent := NewWithProvider(events, &MockProvider{}, "mock-model")
 
 	// Create a render_scene request without any shapes
 	req := &RenderSceneRequest{
@@ -467,7 +530,7 @@ func TestRenderSceneEmptyScene(t *testing.T) {
 
 func TestRenderSceneWithShape(t *testing.T) {
 	events := make(chan AgentEvent, 100)
-	agent := NewWithMockLLM(events, &MockLLMClient{})
+	agent := NewWithProvider(events, &MockProvider{}, "mock-model")
 
 	// Add a simple sphere to the scene
 	shape := ShapeRequest{
@@ -598,7 +661,7 @@ func TestRenderSceneToolParsing(t *testing.T) {
 		Args: map[string]interface{}{},
 	}
 
-	req := parseToolRequestFromFunctionCall(call)
+	req := parseToolRequestFromFunctionCall(&llm.FunctionCall{Name: call.Name, Arguments: call.Args})
 	if req == nil {
 		t.Fatal("Expected non-nil request")
 	}
@@ -615,7 +678,7 @@ func TestRenderSceneToolParsing(t *testing.T) {
 
 func TestGetSceneStateWithEmptyScene(t *testing.T) {
 	events := make(chan AgentEvent, 100)
-	agent := NewWithMockLLM(events, &MockLLMClient{})
+	agent := NewWithProvider(events, &MockProvider{}, "mock-model")
 
 	req := &GetSceneStateRequest{
 		BaseToolRequest: BaseToolRequest{ToolType: "get_scene_state"},
@@ -651,7 +714,7 @@ func TestGetSceneStateWithEmptyScene(t *testing.T) {
 
 func TestGetSceneStateWithShapesAndLights(t *testing.T) {
 	events := make(chan AgentEvent, 100)
-	agent := NewWithMockLLM(events, &MockLLMClient{})
+	agent := NewWithProvider(events, &MockProvider{}, "mock-model")
 
 	// Add a shape
 	shape := ShapeRequest{
@@ -738,7 +801,7 @@ func TestGetSceneStateToolParsing(t *testing.T) {
 		Args: map[string]any{},
 	}
 
-	req := parseToolRequestFromFunctionCall(call)
+	req := parseToolRequestFromFunctionCall(&llm.FunctionCall{Name: call.Name, Arguments: call.Args})
 	if req == nil {
 		t.Fatal("Expected non-nil request")
 	}
@@ -750,5 +813,299 @@ func TestGetSceneStateToolParsing(t *testing.T) {
 
 	if getSceneReq.ToolName() != "get_scene_state" {
 		t.Errorf("Expected tool name 'get_scene_state', got %q", getSceneReq.ToolName())
+	}
+}
+
+// TestConversationHistoryPreserved verifies that ProcessMessage returns complete conversation history
+// including user messages, assistant responses, function calls, and function responses
+func TestConversationHistoryPreserved(t *testing.T) {
+	events := make(chan AgentEvent, 100)
+
+	mockProvider := &MockProvider{
+		Responses: []*genai.GenerateContentResponse{
+			// First response: LLM calls create_shape
+			NewMockResponse("I'll create a sphere.", &genai.FunctionCall{
+				Name: "create_shape",
+				Args: map[string]any{
+					"id":   "sphere1",
+					"type": "sphere",
+					"properties": map[string]any{
+						"center": []any{0.0, 0.0, 0.0},
+						"radius": 1.0,
+						"material": map[string]any{
+							"type":   "lambertian",
+							"albedo": []any{0.8, 0.2, 0.2},
+						},
+					},
+				},
+			}),
+			// Second response: LLM responds with text (no tool calls)
+			NewMockResponse("Done! The sphere has been created."),
+		},
+	}
+
+	agent := NewWithProvider(events, mockProvider, "mock-model")
+
+	// Initial conversation with one user message
+	conversation := []llm.Message{
+		{
+			Role:  "user",
+			Parts: []llm.Part{{Type: llm.PartTypeText, Text: "Create a red sphere"}},
+		},
+	}
+
+	// Process the message
+	updatedConversation, err := agent.ProcessMessage(context.Background(), conversation)
+	if err != nil {
+		t.Fatalf("ProcessMessage failed: %v", err)
+	}
+
+	// Verify conversation structure:
+	// [0] user message (original)
+	// [1] assistant message with text + function call
+	// [2] function response
+	// [3] assistant message with text only (completion)
+
+	if len(updatedConversation) != 4 {
+		t.Fatalf("Expected 4 messages in conversation, got %d", len(updatedConversation))
+	}
+
+	// Check message 0: original user message
+	if updatedConversation[0].Role != "user" {
+		t.Errorf("Message 0: expected role 'user', got %q", updatedConversation[0].Role)
+	}
+
+	// Check message 1: assistant response with function call
+	if updatedConversation[1].Role != "assistant" {
+		t.Errorf("Message 1: expected role 'assistant', got %q", updatedConversation[1].Role)
+	}
+
+	// Should have both text and function call parts
+	hasText := false
+	hasFunctionCall := false
+	for _, part := range updatedConversation[1].Parts {
+		if part.Type == llm.PartTypeText && part.Text != "" {
+			hasText = true
+		}
+		if part.Type == llm.PartTypeFunctionCall {
+			hasFunctionCall = true
+		}
+	}
+	if !hasText {
+		t.Error("Message 1: expected text part in assistant response")
+	}
+	if !hasFunctionCall {
+		t.Error("Message 1: expected function call part in assistant response")
+	}
+
+	// Check message 2: function response
+	if updatedConversation[2].Role != "function" {
+		t.Errorf("Message 2: expected role 'function', got %q", updatedConversation[2].Role)
+	}
+
+	// Should have function response parts
+	hasFunctionResponse := false
+	for _, part := range updatedConversation[2].Parts {
+		if part.Type == llm.PartTypeFunctionResponse {
+			hasFunctionResponse = true
+			// Verify it has the result
+			if part.FunctionResp == nil {
+				t.Error("Message 2: function response part missing FunctionResp")
+			}
+		}
+	}
+	if !hasFunctionResponse {
+		t.Error("Message 2: expected function response part")
+	}
+
+	// Check message 3: final assistant response (text only, no function calls)
+	if updatedConversation[3].Role != "assistant" {
+		t.Errorf("Message 3: expected role 'assistant', got %q", updatedConversation[3].Role)
+	}
+
+	// Verify no function calls in final message (signals completion)
+	for _, part := range updatedConversation[3].Parts {
+		if part.Type == llm.PartTypeFunctionCall {
+			t.Error("Message 3: unexpected function call in completion message")
+		}
+	}
+
+	// Drain events
+	close(events)
+	for range events {
+	}
+}
+
+// TestMultiTurnConversationHistory verifies that conversation history is properly maintained
+// across multiple user messages in a session
+func TestMultiTurnConversationHistory(t *testing.T) {
+	events := make(chan AgentEvent, 100)
+
+	mockProvider := &MockProvider{
+		Responses: []*genai.GenerateContentResponse{
+			// Turn 1: Create sphere
+			NewMockResponse("Creating a red sphere.", &genai.FunctionCall{
+				Name: "create_shape",
+				Args: map[string]any{
+					"id":   "sphere1",
+					"type": "sphere",
+					"properties": map[string]any{
+						"center": []any{0.0, 0.0, 0.0},
+						"radius": 1.0,
+						"material": map[string]any{
+							"type":   "lambertian",
+							"albedo": []any{0.8, 0.2, 0.2},
+						},
+					},
+				},
+			}),
+			NewMockResponse("Done! Created a red sphere."),
+
+			// Turn 2: Create another shape (should have context from turn 1)
+			NewMockResponse("Creating a blue cube next to the sphere.", &genai.FunctionCall{
+				Name: "create_shape",
+				Args: map[string]any{
+					"id":   "cube1",
+					"type": "box",
+					"properties": map[string]any{
+						"center": []any{3.0, 0.0, 0.0},
+						"size":   []any{1.0, 1.0, 1.0},
+						"material": map[string]any{
+							"type":   "lambertian",
+							"albedo": []any{0.2, 0.2, 0.8},
+						},
+					},
+				},
+			}),
+			NewMockResponse("Done! Added a blue cube."),
+
+			// Turn 3: Update existing shape (referencing previous turns)
+			NewMockResponse("Making the sphere bigger.", &genai.FunctionCall{
+				Name: "update_shape",
+				Args: map[string]any{
+					"id": "sphere1",
+					"properties": map[string]any{
+						"radius": 2.0,
+					},
+				},
+			}),
+			NewMockResponse("Done! The sphere is now bigger."),
+		},
+	}
+
+	agent := NewWithProvider(events, mockProvider, "mock-model")
+
+	// Turn 1: First user message
+	conversation := []llm.Message{
+		{
+			Role:  "user",
+			Parts: []llm.Part{{Type: llm.PartTypeText, Text: "Create a red sphere"}},
+		},
+	}
+
+	conversation, err := agent.ProcessMessage(context.Background(), conversation)
+	if err != nil {
+		t.Fatalf("Turn 1 failed: %v", err)
+	}
+
+	// After turn 1, should have:
+	// [0] user: "Create a red sphere"
+	// [1] assistant: text + create_shape call
+	// [2] function: create_shape response
+	// [3] assistant: "Done! Created a red sphere."
+
+	if len(conversation) != 4 {
+		t.Errorf("After turn 1: expected 4 messages, got %d", len(conversation))
+	}
+
+	// Turn 2: Add another user message
+	conversation = append(conversation, llm.Message{
+		Role:  "user",
+		Parts: []llm.Part{{Type: llm.PartTypeText, Text: "Now add a blue cube"}},
+	})
+
+	conversation, err = agent.ProcessMessage(context.Background(), conversation)
+	if err != nil {
+		t.Fatalf("Turn 2 failed: %v", err)
+	}
+
+	// After turn 2, should have previous 4 + new 4:
+	// [4] user: "Now add a blue cube"
+	// [5] assistant: text + create_shape call
+	// [6] function: create_shape response
+	// [7] assistant: "Done! Added a blue cube."
+
+	if len(conversation) != 8 {
+		t.Errorf("After turn 2: expected 8 messages, got %d", len(conversation))
+	}
+
+	// Verify turn 2 messages have correct structure
+	if conversation[4].Role != "user" {
+		t.Errorf("Message 4: expected role 'user', got %q", conversation[4].Role)
+	}
+	if conversation[5].Role != "assistant" {
+		t.Errorf("Message 5: expected role 'assistant', got %q", conversation[5].Role)
+	}
+	if conversation[6].Role != "function" {
+		t.Errorf("Message 6: expected role 'function', got %q", conversation[6].Role)
+	}
+	if conversation[7].Role != "assistant" {
+		t.Errorf("Message 7: expected role 'assistant', got %q", conversation[7].Role)
+	}
+
+	// Turn 3: Update previous shape (tests that context is preserved)
+	conversation = append(conversation, llm.Message{
+		Role:  "user",
+		Parts: []llm.Part{{Type: llm.PartTypeText, Text: "Make the sphere bigger"}},
+	})
+
+	conversation, err = agent.ProcessMessage(context.Background(), conversation)
+	if err != nil {
+		t.Fatalf("Turn 3 failed: %v", err)
+	}
+
+	// After turn 3, should have 8 + 4 = 12 messages
+	if len(conversation) != 12 {
+		t.Errorf("After turn 3: expected 12 messages, got %d", len(conversation))
+	}
+
+	// Verify the update_shape function call is in the conversation
+	foundUpdateCall := false
+	for i := 8; i < len(conversation); i++ {
+		if conversation[i].Role == "assistant" {
+			for _, part := range conversation[i].Parts {
+				if part.Type == llm.PartTypeFunctionCall && part.FunctionCall != nil {
+					if part.FunctionCall.Name == "update_shape" {
+						foundUpdateCall = true
+						// Verify it references the correct shape ID from turn 1
+						if id, ok := part.FunctionCall.Arguments["id"].(string); ok {
+							if id != "sphere1" {
+								t.Errorf("Expected update to reference 'sphere1', got %q", id)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if !foundUpdateCall {
+		t.Error("Expected to find update_shape function call in turn 3")
+	}
+
+	// Verify all user messages are preserved
+	userMessageCount := 0
+	for _, msg := range conversation {
+		if msg.Role == "user" {
+			userMessageCount++
+		}
+	}
+	if userMessageCount != 3 {
+		t.Errorf("Expected 3 user messages, got %d", userMessageCount)
+	}
+
+	// Drain events
+	close(events)
+	for range events {
 	}
 }

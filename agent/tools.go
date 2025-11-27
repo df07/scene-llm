@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"github.com/df07/scene-llm/agent/llm"
 	"google.golang.org/genai"
 )
 
@@ -352,7 +353,7 @@ func getSceneStateToolDeclaration() *genai.FunctionDeclaration {
 // ------------------------------------------------------------
 
 // parseToolRequestFromFunctionCall creates a ToolRequest from any function call
-func parseToolRequestFromFunctionCall(call *genai.FunctionCall) ToolRequest {
+func parseToolRequestFromFunctionCall(call *llm.FunctionCall) ToolRequest {
 	switch call.Name {
 	case "create_shape":
 		return parseCreateShapeRequest(call)
@@ -380,8 +381,8 @@ func parseToolRequestFromFunctionCall(call *genai.FunctionCall) ToolRequest {
 }
 
 // parseCreateShapeRequest creates a CreateShapeRequest from a create_shape function call
-func parseCreateShapeRequest(call *genai.FunctionCall) *CreateShapeRequest {
-	shape := extractShapeRequest(call.Args)
+func parseCreateShapeRequest(call *llm.FunctionCall) *CreateShapeRequest {
+	shape := extractShapeRequest(call.Arguments)
 
 	return &CreateShapeRequest{
 		BaseToolRequest: BaseToolRequest{ToolType: "create_shape", Id: shape.ID},
@@ -390,9 +391,9 @@ func parseCreateShapeRequest(call *genai.FunctionCall) *CreateShapeRequest {
 }
 
 // parseUpdateShapeRequest creates an UpdateShapeRequest from an update_shape function call
-func parseUpdateShapeRequest(call *genai.FunctionCall) *UpdateShapeRequest {
-	id, _ := extractStringArg(call.Args, "id")
-	updates, _ := extractMapArg(call.Args, "updates")
+func parseUpdateShapeRequest(call *llm.FunctionCall) *UpdateShapeRequest {
+	id, _ := extractStringArg(call.Arguments, "id")
+	updates, _ := extractMapArg(call.Arguments, "updates")
 
 	return &UpdateShapeRequest{
 		BaseToolRequest: BaseToolRequest{ToolType: "update_shape", Id: id},
@@ -401,8 +402,8 @@ func parseUpdateShapeRequest(call *genai.FunctionCall) *UpdateShapeRequest {
 }
 
 // parseRemoveShapeRequest creates a RemoveShapeRequest from a remove_shape function call
-func parseRemoveShapeRequest(call *genai.FunctionCall) *RemoveShapeRequest {
-	id, _ := extractStringArg(call.Args, "id")
+func parseRemoveShapeRequest(call *llm.FunctionCall) *RemoveShapeRequest {
+	id, _ := extractStringArg(call.Arguments, "id")
 
 	return &RemoveShapeRequest{
 		BaseToolRequest: BaseToolRequest{ToolType: "remove_shape", Id: id},
@@ -410,11 +411,11 @@ func parseRemoveShapeRequest(call *genai.FunctionCall) *RemoveShapeRequest {
 }
 
 // parseSetEnvironmentLightingRequest creates a SetEnvironmentLightingRequest from a set_environment_lighting function call
-func parseSetEnvironmentLightingRequest(call *genai.FunctionCall) *SetEnvironmentLightingRequest {
-	lightingType, _ := extractStringArg(call.Args, "type")
-	topColor, _ := extractFloatArrayArg(call.Args, "top_color")
-	bottomColor, _ := extractFloatArrayArg(call.Args, "bottom_color")
-	emission, _ := extractFloatArrayArg(call.Args, "emission")
+func parseSetEnvironmentLightingRequest(call *llm.FunctionCall) *SetEnvironmentLightingRequest {
+	lightingType, _ := extractStringArg(call.Arguments, "type")
+	topColor, _ := extractFloatArrayArg(call.Arguments, "top_color")
+	bottomColor, _ := extractFloatArrayArg(call.Arguments, "bottom_color")
+	emission, _ := extractFloatArrayArg(call.Arguments, "emission")
 
 	return &SetEnvironmentLightingRequest{
 		BaseToolRequest: BaseToolRequest{ToolType: "set_environment_lighting"},
@@ -426,8 +427,8 @@ func parseSetEnvironmentLightingRequest(call *genai.FunctionCall) *SetEnvironmen
 }
 
 // parseCreateLightRequest creates a CreateLightRequest from a create_light function call
-func parseCreateLightRequest(call *genai.FunctionCall) *CreateLightRequest {
-	light := extractLightRequest(call.Args)
+func parseCreateLightRequest(call *llm.FunctionCall) *CreateLightRequest {
+	light := extractLightRequest(call.Arguments)
 
 	return &CreateLightRequest{
 		BaseToolRequest: BaseToolRequest{ToolType: "create_light"},
@@ -436,9 +437,9 @@ func parseCreateLightRequest(call *genai.FunctionCall) *CreateLightRequest {
 }
 
 // parseUpdateLightRequest creates an UpdateLightRequest from an update_light function call
-func parseUpdateLightRequest(call *genai.FunctionCall) *UpdateLightRequest {
-	id, _ := extractStringArg(call.Args, "id")
-	updates, _ := extractMapArg(call.Args, "updates")
+func parseUpdateLightRequest(call *llm.FunctionCall) *UpdateLightRequest {
+	id, _ := extractStringArg(call.Arguments, "id")
+	updates, _ := extractMapArg(call.Arguments, "updates")
 
 	return &UpdateLightRequest{
 		BaseToolRequest: BaseToolRequest{ToolType: "update_light", Id: id},
@@ -447,19 +448,19 @@ func parseUpdateLightRequest(call *genai.FunctionCall) *UpdateLightRequest {
 }
 
 // parseRemoveLightRequest creates a RemoveLightRequest from a remove_light function call
-func parseRemoveLightRequest(call *genai.FunctionCall) *RemoveLightRequest {
-	id, _ := extractStringArg(call.Args, "id")
+func parseRemoveLightRequest(call *llm.FunctionCall) *RemoveLightRequest {
+	id, _ := extractStringArg(call.Arguments, "id")
 
 	return &RemoveLightRequest{
 		BaseToolRequest: BaseToolRequest{ToolType: "remove_light", Id: id},
 	}
 }
 
-func parseSetCameraRequest(call *genai.FunctionCall) *SetCameraRequest {
-	center, _ := extractFloatArrayArg(call.Args, "center")
-	lookAt, _ := extractFloatArrayArg(call.Args, "look_at")
-	vfov, hasVFov := extractFloatArg(call.Args, "vfov")
-	aperture, _ := extractFloatArg(call.Args, "aperture")
+func parseSetCameraRequest(call *llm.FunctionCall) *SetCameraRequest {
+	center, _ := extractFloatArrayArg(call.Arguments, "center")
+	lookAt, _ := extractFloatArrayArg(call.Arguments, "look_at")
+	vfov, hasVFov := extractFloatArg(call.Arguments, "vfov")
+	aperture, _ := extractFloatArg(call.Arguments, "aperture")
 
 	// Apply defaults for optional parameters
 	if !hasVFov || vfov == 0 {
@@ -478,13 +479,13 @@ func parseSetCameraRequest(call *genai.FunctionCall) *SetCameraRequest {
 	}
 }
 
-func parseRenderSceneRequest(call *genai.FunctionCall) *RenderSceneRequest {
+func parseRenderSceneRequest(call *llm.FunctionCall) *RenderSceneRequest {
 	return &RenderSceneRequest{
 		BaseToolRequest: BaseToolRequest{ToolType: "render_scene"},
 	}
 }
 
-func parseGetSceneStateRequest(call *genai.FunctionCall) *GetSceneStateRequest {
+func parseGetSceneStateRequest(call *llm.FunctionCall) *GetSceneStateRequest {
 	return &GetSceneStateRequest{
 		BaseToolRequest: BaseToolRequest{ToolType: "get_scene_state"},
 	}

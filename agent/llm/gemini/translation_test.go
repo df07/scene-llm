@@ -42,6 +42,35 @@ func TestToInternalPart_ThinkingText(t *testing.T) {
 	}
 }
 
+func TestToInternalPart_ThinkingTextDetectedByPrefix(t *testing.T) {
+	// Test that we detect thinking even when SDK doesn't set Thought field
+	testCases := []struct {
+		text     string
+		expected bool
+	}{
+		{"thought: analyzing the scene", true},
+		{"Thought: let me consider this", true},
+		{"THOUGHT: planning approach", true},
+		{"  thought: with leading whitespace", true},
+		{"\tthought: with tab", true},
+		{"Not a thought token", false},
+		{"This contains the word thought but doesn't start with it", false},
+	}
+
+	for _, tc := range testCases {
+		genaiPart := &genai.Part{
+			Text:    tc.text,
+			Thought: false, // SDK didn't set the field
+		}
+
+		result := ToInternalPart(genaiPart)
+
+		if result.Thought != tc.expected {
+			t.Errorf("For text '%s': expected Thought=%v, got %v", tc.text, tc.expected, result.Thought)
+		}
+	}
+}
+
 func TestToInternalPart_FunctionCall(t *testing.T) {
 	genaiPart := &genai.Part{
 		FunctionCall: &genai.FunctionCall{

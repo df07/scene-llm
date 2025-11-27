@@ -2,6 +2,7 @@
 scene-llm
 web/scene-server
 web/web-server
+web/web
 
 # Go build artifacts
 *.exe
@@ -45,9 +46,9 @@ web/tmp/
 
 # Render output
 output/
+test-*.png
 
 # Profile files
 *.prof
 .claude/settings.local.json
 .env
-test-*.png

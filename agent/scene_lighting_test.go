@@ -3,6 +3,7 @@ package agent
 import (
 	"testing"
 
+	"github.com/df07/scene-llm/agent/llm"
 	"google.golang.org/genai"
 )
 
@@ -106,7 +107,7 @@ func TestSetEnvironmentLightingToolCall(t *testing.T) {
 		},
 	}
 
-	operation := parseSetEnvironmentLightingRequest(functionCall)
+	operation := parseSetEnvironmentLightingRequest(&llm.FunctionCall{Name: functionCall.Name, Arguments: functionCall.Args})
 	if operation == nil {
 		t.Fatal("Failed to parse set_environment_lighting operation")
 	}
@@ -198,7 +199,7 @@ func TestSetEnvironmentLightingToolParsing(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			operation := parseSetEnvironmentLightingRequest(tt.functionCall)
+			operation := parseSetEnvironmentLightingRequest(&llm.FunctionCall{Name: tt.functionCall.Name, Arguments: tt.functionCall.Args})
 
 			if tt.expectNil {
 				if operation != nil {
@@ -674,7 +675,7 @@ func TestLightToolParsing(t *testing.T) {
 		},
 	}
 
-	createOp := parseCreateLightRequest(createCall)
+	createOp := parseCreateLightRequest(&llm.FunctionCall{Name: createCall.Name, Arguments: createCall.Args})
 	if createOp == nil {
 		t.Fatal("Failed to parse create_light operation")
 	}
@@ -698,7 +699,7 @@ func TestLightToolParsing(t *testing.T) {
 		},
 	}
 
-	updateOp := parseUpdateLightRequest(updateCall)
+	updateOp := parseUpdateLightRequest(&llm.FunctionCall{Name: updateCall.Name, Arguments: updateCall.Args})
 	if updateOp == nil {
 		t.Fatal("Failed to parse update_light operation")
 	}
@@ -714,7 +715,7 @@ func TestLightToolParsing(t *testing.T) {
 		},
 	}
 
-	removeOp := parseRemoveLightRequest(removeCall)
+	removeOp := parseRemoveLightRequest(&llm.FunctionCall{Name: removeCall.Name, Arguments: removeCall.Args})
 	if removeOp == nil {
 		t.Fatal("Failed to parse remove_light operation")
 	}

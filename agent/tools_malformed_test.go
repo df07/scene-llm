@@ -3,6 +3,7 @@ package agent
 import (
 	"testing"
 
+	"github.com/df07/scene-llm/agent/llm"
 	"google.golang.org/genai"
 )
 
@@ -346,7 +347,7 @@ func TestMalformedLLMInput(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Parse the operation
-			op := parseToolRequestFromFunctionCall(tt.call)
+			op := parseToolRequestFromFunctionCall(&llm.FunctionCall{Name: tt.call.Name, Arguments: tt.call.Args})
 			if op == nil {
 				t.Fatal("Expected operation to be non-nil")
 			}

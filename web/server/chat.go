@@ -18,14 +18,16 @@ import (
 	"github.com/df07/go-progressive-raytracer/pkg/renderer"
 	"github.com/df07/go-progressive-raytracer/pkg/scene"
 	"github.com/df07/scene-llm/agent"
-	"google.golang.org/genai"
+	"github.com/df07/scene-llm/agent/llm"
 )
 
 // ChatSession represents an ongoing conversation with persistent agent state
 type ChatSession struct {
 	ID       string             `json:"id"`
-	Messages []*genai.Content   `json:"messages"`
+	Messages []llm.Message      `json:"messages"`
 	Agent    *agent.Agent       `json:"-"` // Agent with persistent SceneManager
+	Provider llm.LLMProvider    // LLM provider for this session (keeps connection warm)
+	ModelID  string             // Current model ID (e.g., "gemini-2.5-flash")
 	cancel   context.CancelFunc // Function to cancel ongoing processing
 	mutex    sync.Mutex         // Protects cancel function
 }
@@ -68,19 +70,33 @@ func (s *Server) getOrCreateSession(sessionID string) *ChatSession {
 
 	session, exists := s.sessions[sessionID]
 	if !exists {
-		// Create agent for this session (this will create a persistent SceneManager)
-		ag, err := agent.New(nil) // We'll set the events channel later per message
+		// Use first available model as default (in future, allow user to select)
+		models := s.registry.ListModels()
+		if len(models) == 0 {
+			log.Printf("No models available for session %s", sessionID)
+			return nil
+		}
+		modelID := models[0]
+
+		// Get provider for this model
+		provider, err := s.registry.GetProviderForModel(modelID)
 		if err != nil {
-			log.Printf("Failed to create agent for session %s: %v", sessionID, err)
+			log.Printf("Failed to get provider for model %s: %v", modelID, err)
 			return nil
 		}
 
+		// Create agent for this session with provider
+		ag := agent.NewWithProvider(nil, provider, modelID) // We'll set the events channel later per message
+
 		session = &ChatSession{
 			ID:       sessionID,
-			Messages: []*genai.Content{},
+			Messages: []llm.Message{},
 			Agent:    ag,
+			Provider: provider,
+			ModelID:  modelID,
 		}
 		s.sessions[sessionID] = session
+		log.Printf("Created session %s with model %s", sessionID, modelID)
 	}
 
 	return session
@@ -202,13 +218,13 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add user message to conversation history
-	s.mutex.Lock()
-	userMessage := &genai.Content{
-		Parts: []*genai.Part{{Text: chatMsg.Message}},
+	session.mutex.Lock()
+	userMessage := llm.Message{
+		Parts: []llm.Part{{Type: llm.PartTypeText, Text: chatMsg.Message}},
 		Role:  "user",
 	}
 	session.Messages = append(session.Messages, userMessage)
-	s.mutex.Unlock()
+	session.mutex.Unlock()
 
 	// Return immediate acknowledgment with session ID
 	response := ChatResponse{
@@ -313,7 +329,13 @@ func (s *Server) processMessage(session *ChatSession, message string, quality ag
 			session.mutex.Unlock()
 		}()
 
-		if err := ag.ProcessMessage(ctx, session.Messages); err != nil {
+		// Read messages under lock
+		session.mutex.Lock()
+		messages := session.Messages
+		session.mutex.Unlock()
+
+		updatedMessages, err := ag.ProcessMessage(ctx, messages)
+		if err != nil {
 			// Check if the error is due to cancellation
 			if errors.Is(err, context.Canceled) {
 				agentEvents <- agent.NewErrorEvent(fmt.Errorf("processing interrupted by user"))
@@ -321,6 +343,12 @@ func (s *Server) processMessage(session *ChatSession, message string, quality ag
 				agentEvents <- agent.NewErrorEvent(err)
 			}
 		}
+
+		// Update session with complete conversation history
+		session.mutex.Lock()
+		session.Messages = updatedMessages
+		session.mutex.Unlock()
+
 		close(agentEvents)
 	}()
 
@@ -328,16 +356,7 @@ func (s *Server) processMessage(session *ChatSession, message string, quality ag
 	for event := range agentEvents {
 		switch e := event.(type) {
 		case agent.ResponseEvent:
-			// Handle text response - add to conversation history
-			// Add to conversation history
-			s.mutex.Lock()
-			assistantMessage := &genai.Content{
-				Parts: []*genai.Part{{Text: e.Text}},
-				Role:  "model",
-			}
-			session.Messages = append(session.Messages, assistantMessage)
-			s.mutex.Unlock()
-			// Broadcast the response (send whole event to include thought field)
+			// Broadcast the response (conversation history updated after ProcessMessage completes)
 			s.broadcastToSession(session.ID, SSEChatEvent{Type: e.EventType(), Data: e})
 
 		case agent.SceneRenderEvent:

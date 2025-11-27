@@ -3,6 +3,7 @@ package agent
 import (
 	"testing"
 
+	"github.com/df07/scene-llm/agent/llm"
 	"google.golang.org/genai"
 )
 
@@ -69,7 +70,7 @@ func TestParseToolRequestFromFunctionCall(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			operation := parseToolRequestFromFunctionCall(tt.functionCall)
+			operation := parseToolRequestFromFunctionCall(&llm.FunctionCall{Name: tt.functionCall.Name, Arguments: tt.functionCall.Args})
 
 			if tt.expectedType == "" {
 				if operation != nil {

@@ -40,11 +40,39 @@ func (r *Registry) GetProviderForModel(modelID string) (LLMProvider, error) {
 	return r.providers[providerName], nil
 }
 
-// ListModels returns all available model IDs
+// ListModels returns all available model IDs with preferred models first
+// The first model in the list is the recommended default
 func (r *Registry) ListModels() []string {
-	models := make([]string, 0, len(r.models))
-	for modelID := range r.models {
-		models = append(models, modelID)
+	// Preferred models in order of preference
+	preferredModels := []string{
+		"gemini-2.5-flash",
+		"gemini-1.5-flash",
+		"gemini-2.5-pro",
+		"gemini-1.5-pro",
 	}
+
+	var models []string
+
+	// Add preferred models first if they exist
+	for _, preferred := range preferredModels {
+		if _, exists := r.models[preferred]; exists {
+			models = append(models, preferred)
+		}
+	}
+
+	// Add any other models
+	for modelID := range r.models {
+		found := false
+		for _, preferred := range preferredModels {
+			if modelID == preferred {
+				found = true
+				break
+			}
+		}
+		if !found {
+			models = append(models, modelID)
+		}
+	}
+
 	return models
 }

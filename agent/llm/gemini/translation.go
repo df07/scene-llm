@@ -2,6 +2,7 @@ package gemini
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/df07/scene-llm/agent/llm"
 	"google.golang.org/genai"
@@ -39,10 +40,13 @@ func ToInternalMessage(content *genai.Content) llm.Message {
 func ToInternalPart(part *genai.Part) llm.Part {
 	// Text part
 	if part.Text != "" {
+		// Check if this is a thinking token - SDK doesn't always set Thought field,
+		// so we check both the field and the text content
+		isThought := part.Thought || strings.HasPrefix(strings.ToLower(strings.TrimSpace(part.Text)), "thought")
 		return llm.Part{
 			Type:    llm.PartTypeText,
 			Text:    part.Text,
-			Thought: part.Thought,
+			Thought: isThought,
 		}
 	}
 
