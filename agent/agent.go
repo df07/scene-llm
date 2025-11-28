@@ -12,7 +12,6 @@ import (
 	"github.com/df07/go-progressive-raytracer/pkg/integrator"
 	"github.com/df07/go-progressive-raytracer/pkg/renderer"
 	"github.com/df07/scene-llm/agent/llm"
-	"github.com/df07/scene-llm/agent/llm/gemini"
 )
 
 // Agent handles LLM conversations and tool execution
@@ -60,9 +59,8 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []llm.Message) 
 	// Add scene context to the latest message
 	conversation = a.addSceneContext(conversation, sceneContext)
 
-	// Get tool declarations (convert from genai format to internal format)
-	genaiTools := getAllToolDeclarations()
-	tools := gemini.ToInternalTools(genaiTools)
+	// Get tool declarations in provider-agnostic format
+	tools := getAllTools()
 
 	// Work with conversation directly (already in internal format)
 	messages := conversation

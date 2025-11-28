@@ -102,7 +102,23 @@ type GetSceneStateRequest struct {
 	SceneState map[string]interface{} `json:"scene_state,omitempty"` // Populated after execution
 }
 
-// getAllToolDeclarations returns all available tool declarations
+// getAllTools returns all available tool declarations in provider-agnostic format
+func getAllTools() []llm.Tool {
+	return []llm.Tool{
+		createShapeTool(),
+		updateShapeTool(),
+		removeShapeTool(),
+		createLightTool(),
+		updateLightTool(),
+		removeLightTool(),
+		setEnvironmentLightingTool(),
+		setCameraTool(),
+		renderSceneTool(),
+		getSceneStateTool(),
+	}
+}
+
+// Deprecated: Use getAllTools() instead. Kept for backwards compatibility during migration.
 func getAllToolDeclarations() []*genai.FunctionDeclaration {
 	return []*genai.FunctionDeclaration{
 		createShapeToolDeclaration(),
@@ -117,6 +133,230 @@ func getAllToolDeclarations() []*genai.FunctionDeclaration {
 		getSceneStateToolDeclaration(),
 	}
 }
+
+// ------------------------------------------------------------
+// Provider-agnostic tool declarations (llm.Tool format)
+// ------------------------------------------------------------
+
+func createShapeTool() llm.Tool {
+	return llm.Tool{
+		Name:        "create_shape",
+		Description: "Create a 3D shape in the scene with a unique ID",
+		Parameters: &llm.Schema{
+			Type: llm.TypeObject,
+			Properties: map[string]*llm.Schema{
+				"id": {
+					Type:        llm.TypeString,
+					Description: "Unique identifier for the shape (e.g., 'blue_sphere', 'main_building')",
+				},
+				"type": {
+					Type:        llm.TypeString,
+					Enum:        []string{"sphere", "box", "quad", "disc", "cylinder", "cone"},
+					Description: "The type of shape to create",
+				},
+				"properties": {
+					Type:        llm.TypeObject,
+					Description: "Shape-specific properties including optional material. For sphere: {center: [x,y,z], radius: number, material?: {...}}. For box: {center: [x,y,z], dimensions: [w,h,d], rotation?: [x,y,z], material?: {...}}. For quad: {corner: [x,y,z], u: [x,y,z], v: [x,y,z], material?: {...}}. For disc: {center: [x,y,z], normal: [x,y,z], radius: number, material?: {...}}. For cylinder: {base_center: [x,y,z], top_center: [x,y,z], radius: number, capped: bool, material?: {...}}. For cone: {base_center: [x,y,z], base_radius: number, top_center: [x,y,z], top_radius: number (0 for pointed cone, >0 for frustum), capped: bool, material?: {...}}. Material defaults to gray lambertian if not specified. Materials: Lambertian {type: 'lambertian', albedo: [r,g,b]}, Metal {type: 'metal', albedo: [r,g,b], fuzz: 0.0-1.0}, Dielectric {type: 'dielectric', refractive_index: number (1.0=air, 1.33=water, 1.5=glass, 2.4=diamond)}",
+				},
+			},
+			Required: []string{"id", "type", "properties"},
+		},
+	}
+}
+
+func updateShapeTool() llm.Tool {
+	return llm.Tool{
+		Name:        "update_shape",
+		Description: "Update an existing shape by ID. Can update the shape's ID, type, or any properties like color, position, size, etc.",
+		Parameters: &llm.Schema{
+			Type: llm.TypeObject,
+			Properties: map[string]*llm.Schema{
+				"id": {
+					Type:        llm.TypeString,
+					Description: "ID of the shape to update",
+				},
+				"updates": {
+					Type:        llm.TypeObject,
+					Description: "Object containing fields to update. Examples: {\"id\": \"new_name\"} to rename, {\"properties\": {\"position\": [1, 2, 3]}} to move shape, {\"properties\": {\"material\": {\"type\": \"metal\", \"albedo\": [0.9, 0.9, 0.9], \"fuzz\": 0.1}}} to make metallic, {\"properties\": {\"material\": {\"type\": \"dielectric\", \"refractive_index\": 1.5}}} to make glass. Only specified fields will be updated.",
+				},
+			},
+			Required: []string{"id", "updates"},
+		},
+	}
+}
+
+func removeShapeTool() llm.Tool {
+	return llm.Tool{
+		Name:        "remove_shape",
+		Description: "Remove a shape from the scene by ID",
+		Parameters: &llm.Schema{
+			Type: llm.TypeObject,
+			Properties: map[string]*llm.Schema{
+				"id": {
+					Type:        llm.TypeString,
+					Description: "Identifier of the shape to remove",
+				},
+			},
+			Required: []string{"id"},
+		},
+	}
+}
+
+func createLightTool() llm.Tool {
+	return llm.Tool{
+		Name:        "create_light",
+		Description: "Create a light source in the scene",
+		Parameters: &llm.Schema{
+			Type: llm.TypeObject,
+			Properties: map[string]*llm.Schema{
+				"id": {
+					Type:        llm.TypeString,
+					Description: "Unique identifier for the light",
+				},
+				"type": {
+					Type:        llm.TypeString,
+					Enum:        []string{"point_spot_light", "area_quad_light", "disc_spot_light", "area_sphere_light", "area_disc_spot_light"},
+					Description: "Type of light source",
+				},
+				"properties": {
+					Type:        llm.TypeObject,
+					Description: "Light-specific properties. All lights need emission: [r,g,b]. Point lights: {center: [x,y,z], emission: [r,g,b]}. Area lights include size/shape properties.",
+				},
+			},
+			Required: []string{"id", "type", "properties"},
+		},
+	}
+}
+
+func updateLightTool() llm.Tool {
+	return llm.Tool{
+		Name:        "update_light",
+		Description: "Update an existing light by ID. Can update the light's ID, type, or any properties like emission, position, size, etc.",
+		Parameters: &llm.Schema{
+			Type: llm.TypeObject,
+			Properties: map[string]*llm.Schema{
+				"id": {
+					Type:        llm.TypeString,
+					Description: "ID of the light to update",
+				},
+				"updates": {
+					Type:        llm.TypeObject,
+					Description: "Object containing fields to update. Examples: {\"id\": \"new_name\"} to rename, {\"properties\": {\"emission\": [2.0, 1.0, 0.5]}} to change emission to warm orange, {\"properties\": {\"center\": [1, 2, 3]}} to move light. Only specified fields will be updated.",
+				},
+			},
+			Required: []string{"id", "updates"},
+		},
+	}
+}
+
+func removeLightTool() llm.Tool {
+	return llm.Tool{
+		Name:        "remove_light",
+		Description: "Remove a light from the scene by ID",
+		Parameters: &llm.Schema{
+			Type: llm.TypeObject,
+			Properties: map[string]*llm.Schema{
+				"id": {
+					Type:        llm.TypeString,
+					Description: "Identifier of the light to remove",
+				},
+			},
+			Required: []string{"id"},
+		},
+	}
+}
+
+func setEnvironmentLightingTool() llm.Tool {
+	return llm.Tool{
+		Name:        "set_environment_lighting",
+		Description: "Set the background/environment lighting for the scene. This replaces any existing environment lighting.",
+		Parameters: &llm.Schema{
+			Type: llm.TypeObject,
+			Properties: map[string]*llm.Schema{
+				"type": {
+					Type:        llm.TypeString,
+					Enum:        []string{"gradient", "uniform", "none"},
+					Description: "Type of environment lighting",
+				},
+				"top_color": {
+					Type:        llm.TypeArray,
+					Items:       &llm.Schema{Type: llm.TypeNumber},
+					Description: "RGB color for gradient top/zenith [r,g,b] (0.0-10.0+). Required for gradient type.",
+				},
+				"bottom_color": {
+					Type:        llm.TypeArray,
+					Items:       &llm.Schema{Type: llm.TypeNumber},
+					Description: "RGB color for gradient bottom/horizon [r,g,b] (0.0-10.0+). Required for gradient type.",
+				},
+				"emission": {
+					Type:        llm.TypeArray,
+					Items:       &llm.Schema{Type: llm.TypeNumber},
+					Description: "RGB emission color [r,g,b] (0.0-10.0+). Required for uniform type.",
+				},
+			},
+			Required: []string{"type"},
+		},
+	}
+}
+
+func setCameraTool() llm.Tool {
+	return llm.Tool{
+		Name:        "set_camera",
+		Description: "Set camera position and properties for viewing the scene",
+		Parameters: &llm.Schema{
+			Type: llm.TypeObject,
+			Properties: map[string]*llm.Schema{
+				"center": {
+					Type:        llm.TypeArray,
+					Items:       &llm.Schema{Type: llm.TypeNumber},
+					Description: "Camera position as [x, y, z]",
+				},
+				"look_at": {
+					Type:        llm.TypeArray,
+					Items:       &llm.Schema{Type: llm.TypeNumber},
+					Description: "Point the camera looks at as [x, y, z]",
+				},
+				"vfov": {
+					Type:        llm.TypeNumber,
+					Description: "Vertical field of view in degrees (default: 45.0)",
+				},
+				"aperture": {
+					Type:        llm.TypeNumber,
+					Description: "Lens aperture for depth of field effect (0.0 = no blur, default: 0.0)",
+				},
+			},
+			Required: []string{"center", "look_at"},
+		},
+	}
+}
+
+func renderSceneTool() llm.Tool {
+	return llm.Tool{
+		Name:        "render_scene",
+		Description: "Render the scene at 400x300 resolution with 500 samples to visually verify the result. Returns a PNG image that you can analyze to check colors, materials, lighting, and composition. Use this to verify your work meets the user's request before providing final response. This is expensive (~3-5 seconds), so use strategically.",
+		Parameters: &llm.Schema{
+			Type:       llm.TypeObject,
+			Properties: map[string]*llm.Schema{},
+			Required:   []string{},
+		},
+	}
+}
+
+func getSceneStateTool() llm.Tool {
+	return llm.Tool{
+		Name:        "get_scene_state",
+		Description: "Get the complete current scene state including all shapes, lights, camera, and environment lighting. Use this when you need to check what's currently in the scene.",
+		Parameters: &llm.Schema{
+			Type:       llm.TypeObject,
+			Properties: map[string]*llm.Schema{},
+			Required:   []string{},
+		},
+	}
+}
+
+// ------------------------------------------------------------
+// Deprecated genai-based tool declarations
+// ------------------------------------------------------------
 
 // createShapeToolDeclaration returns the function declaration for shape creation
 func createShapeToolDeclaration() *genai.FunctionDeclaration {

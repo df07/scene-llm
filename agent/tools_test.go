@@ -7,6 +7,49 @@ import (
 	"google.golang.org/genai"
 )
 
+// TestToolSchemasValid verifies that all tool schemas are properly formed
+// with required fields like Items for array types
+func TestToolSchemasValid(t *testing.T) {
+	tools := getAllTools()
+
+	for _, tool := range tools {
+		t.Run(tool.Name, func(t *testing.T) {
+			// Validate the tool has a name and description
+			if tool.Name == "" {
+				t.Error("Tool name is empty")
+			}
+			if tool.Description == "" {
+				t.Error("Tool description is empty")
+			}
+
+			// Validate parameters schema
+			if tool.Parameters != nil {
+				validateSchema(t, tool.Name, "parameters", tool.Parameters)
+			}
+		})
+	}
+}
+
+// validateSchema recursively validates a schema structure
+func validateSchema(t *testing.T, toolName, path string, schema *llm.Schema) {
+	// If this is an array type, it MUST have Items defined
+	if schema.Type == llm.TypeArray {
+		if schema.Items == nil {
+			t.Errorf("Tool %s: schema at %s is TypeArray but missing Items field (required by Gemini API)", toolName, path)
+		} else {
+			// Recursively validate the Items schema
+			validateSchema(t, toolName, path+".items", schema.Items)
+		}
+	}
+
+	// If this is an object type, validate all properties
+	if schema.Type == llm.TypeObject && schema.Properties != nil {
+		for propName, propSchema := range schema.Properties {
+			validateSchema(t, toolName, path+"."+propName, propSchema)
+		}
+	}
+}
+
 func TestParseToolRequestFromFunctionCall(t *testing.T) {
 	tests := []struct {
 		name           string
