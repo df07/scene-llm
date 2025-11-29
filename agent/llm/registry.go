@@ -2,6 +2,7 @@ package llm
 
 import (
 	"fmt"
+	"sort"
 )
 
 // Registry manages available LLM providers and models
@@ -40,39 +41,20 @@ func (r *Registry) GetProviderForModel(modelID string) (LLMProvider, error) {
 	return r.providers[providerName], nil
 }
 
-// ListModels returns all available model IDs with preferred models first
-// The first model in the list is the recommended default
+// ListModels returns all available model IDs sorted reverse alphabetically
+// This works across multiple providers and puts newer versions first (2.5 before 2.0)
 func (r *Registry) ListModels() []string {
-	// Preferred models in order of preference
-	preferredModels := []string{
-		"gemini-2.5-flash",
-		"gemini-1.5-flash",
-		"gemini-2.5-pro",
-		"gemini-1.5-pro",
-	}
-
+	// Collect all model IDs
 	var models []string
-
-	// Add preferred models first if they exist
-	for _, preferred := range preferredModels {
-		if _, exists := r.models[preferred]; exists {
-			models = append(models, preferred)
-		}
-	}
-
-	// Add any other models
 	for modelID := range r.models {
-		found := false
-		for _, preferred := range preferredModels {
-			if modelID == preferred {
-				found = true
-				break
-			}
-		}
-		if !found {
-			models = append(models, modelID)
-		}
+		models = append(models, modelID)
 	}
+
+	// Sort reverse alphabetically (Z to A)
+	// This naturally puts gemini-2.5 before gemini-2.0
+	sort.Slice(models, func(i, j int) bool {
+		return models[i] > models[j]
+	})
 
 	return models
 }

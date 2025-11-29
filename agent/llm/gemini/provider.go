@@ -3,6 +3,7 @@ package gemini
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/df07/scene-llm/agent/llm"
 	"google.golang.org/genai"
@@ -50,42 +51,101 @@ func (p *Provider) GenerateContent(ctx context.Context, model string, messages [
 	return ToInternalResponse(resp)
 }
 
-// ListModels returns the models available from Gemini
+// ListModels returns the models available from Gemini by querying the API
 func (p *Provider) ListModels() []llm.ModelInfo {
-	return []llm.ModelInfo{
-		{
-			ID:            "gemini-2.5-flash",
-			DisplayName:   "Gemini 2.5 Flash",
-			Provider:      "google",
-			Vision:        true,
-			Thinking:      true,
-			ContextWindow: 1000000, // 1M tokens
-		},
-		{
-			ID:            "gemini-2.5-pro",
-			DisplayName:   "Gemini 2.5 Pro",
-			Provider:      "google",
-			Vision:        true,
-			Thinking:      true,
-			ContextWindow: 2000000, // 2M tokens
-		},
-		{
-			ID:            "gemini-1.5-flash",
-			DisplayName:   "Gemini 1.5 Flash",
-			Provider:      "google",
-			Vision:        true,
-			Thinking:      false,
-			ContextWindow: 1000000,
-		},
-		{
-			ID:            "gemini-1.5-pro",
-			DisplayName:   "Gemini 1.5 Pro",
-			Provider:      "google",
-			Vision:        true,
-			Thinking:      false,
-			ContextWindow: 2000000,
-		},
+	ctx := context.Background()
+
+	// isAllowedModel checks if a model ID matches our patterns for conversational models
+	isAllowedModel := func(modelID string) bool {
+		// Must start with "gemini-"
+		if !strings.HasPrefix(modelID, "gemini-") {
+			return false
+		}
+
+		// Must contain either "flash" or "pro"
+		if !strings.Contains(modelID, "flash") && !strings.Contains(modelID, "pro") {
+			return false
+		}
+
+		// Exclude specialized models we don't want
+		excludePatterns := []string{
+			"image",    // Image generation models
+			"tts",      // Text-to-speech models
+			"computer", // Computer use models
+			"robotics", // Robotics models
+			"lite",     // Lite versions (less capable)
+			"-latest",  // Aliases (we want specific versions)
+		}
+
+		for _, exclude := range excludePatterns {
+			if strings.Contains(modelID, exclude) {
+				return false
+			}
+		}
+
+		return true
 	}
+
+	// Query the Gemini API for available models
+	modelsPage, err := p.client.Models.List(ctx, nil)
+	if err != nil {
+		// Fallback to hardcoded list if API call fails
+		return []llm.ModelInfo{
+			{
+				ID:            "gemini-2.0-flash-exp",
+				DisplayName:   "Gemini 2.0 Flash (Experimental)",
+				Provider:      "google",
+				Vision:        true,
+				Thinking:      true,
+				ContextWindow: 1000000,
+			},
+		}
+	}
+
+	// Build a map of available models from the API response
+	availableModels := make(map[string]*llm.ModelInfo)
+	for _, model := range modelsPage.Items {
+		// Only include models that support generateContent
+		supportsGenerate := false
+		for _, action := range model.SupportedActions {
+			if action == "generateContent" {
+				supportsGenerate = true
+				break
+			}
+		}
+
+		if !supportsGenerate {
+			continue
+		}
+
+		// Extract model ID (remove "models/" prefix if present)
+		modelID := model.Name
+		if len(modelID) > 7 && modelID[:7] == "models/" {
+			modelID = modelID[7:]
+		}
+
+		// Only include models matching our pattern
+		if !isAllowedModel(modelID) {
+			continue
+		}
+
+		availableModels[modelID] = &llm.ModelInfo{
+			ID:            modelID,
+			DisplayName:   model.DisplayName,
+			Provider:      "google",
+			Vision:        true,    // Most Gemini models support vision
+			Thinking:      false,   // Conservative default
+			ContextWindow: 1000000, // Default, actual may vary
+		}
+	}
+
+	// Build result (sorting handled by registry)
+	var result []llm.ModelInfo
+	for _, modelInfo := range availableModels {
+		result = append(result, *modelInfo)
+	}
+
+	return result
 }
 
 // Name returns the provider's name

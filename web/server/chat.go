@@ -36,7 +36,8 @@ type ChatSession struct {
 type ChatMessage struct {
 	SessionID string `json:"session_id,omitempty"`
 	Message   string `json:"message"`
-	Quality   string `json:"quality,omitempty"` // Render quality: "draft" or "high"
+	Quality   string `json:"quality,omitempty"`  // Render quality: "draft" or "high"
+	ModelID   string `json:"model_id,omitempty"` // Model to use for new sessions
 }
 
 // ChatResponse represents the immediate response to a chat message
@@ -60,7 +61,7 @@ func generateSessionID() string {
 }
 
 // getOrCreateSession gets an existing session or creates a new one
-func (s *Server) getOrCreateSession(sessionID string) *ChatSession {
+func (s *Server) getOrCreateSession(sessionID string, preferredModelID string) *ChatSession {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -70,19 +71,33 @@ func (s *Server) getOrCreateSession(sessionID string) *ChatSession {
 
 	session, exists := s.sessions[sessionID]
 	if !exists {
-		// Use first available model as default (in future, allow user to select)
-		models := s.registry.ListModels()
-		if len(models) == 0 {
-			log.Printf("No models available for session %s", sessionID)
-			return nil
+		// Determine which model to use
+		modelID := preferredModelID
+		if modelID == "" {
+			// Use first available model as default
+			models := s.registry.ListModels()
+			if len(models) == 0 {
+				log.Printf("No models available for session %s", sessionID)
+				return nil
+			}
+			modelID = models[0]
 		}
-		modelID := models[0]
 
-		// Get provider for this model
+		// Validate the model is available
 		provider, err := s.registry.GetProviderForModel(modelID)
 		if err != nil {
 			log.Printf("Failed to get provider for model %s: %v", modelID, err)
-			return nil
+			// Fall back to first available model
+			models := s.registry.ListModels()
+			if len(models) == 0 {
+				return nil
+			}
+			modelID = models[0]
+			provider, err = s.registry.GetProviderForModel(modelID)
+			if err != nil {
+				log.Printf("Failed to get provider for fallback model %s: %v", modelID, err)
+				return nil
+			}
 		}
 
 		// Create agent for this session with provider
@@ -211,7 +226,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get or create session
-	session := s.getOrCreateSession(chatMsg.SessionID)
+	session := s.getOrCreateSession(chatMsg.SessionID, chatMsg.ModelID)
 	if session == nil {
 		http.Error(w, "Failed to create session", http.StatusInternalServerError)
 		return

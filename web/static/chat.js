@@ -5,11 +5,14 @@ class SceneLLMChat {
         this.isConnected = false;
         this.isProcessing = false;
         this.renderQuality = 'draft'; // default to fast/draft quality
+        this.selectedModel = null; // Will be set when models are loaded
+        this.availableModels = [];
 
         this.initializeTheme();
         this.initializeQuality();
         this.initializeElements();
         this.attachEventListeners();
+        this.loadAvailableModels();
         this.startNewSession();
     }
 
@@ -52,6 +55,7 @@ class SceneLLMChat {
         this.statusText = document.getElementById('statusText');
         this.clearChatButton = document.getElementById('clearChat');
         this.scenePreview = document.getElementById('scenePreview');
+        this.modelSelect = document.getElementById('modelSelect');
     }
 
     setQuality(quality) {
@@ -89,6 +93,13 @@ class SceneLLMChat {
             });
         });
 
+        // Add model selector handler
+        this.modelSelect.addEventListener('change', (e) => {
+            this.selectedModel = e.target.value;
+            // Save model preference
+            localStorage.setItem('scene-llm-model', this.selectedModel);
+        });
+
         // Auto-resize input and enable send on Enter
         this.messageInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -96,6 +107,39 @@ class SceneLLMChat {
                 this.chatForm.dispatchEvent(new Event('submit'));
             }
         });
+    }
+
+    async loadAvailableModels() {
+        try {
+            const response = await fetch('/api/models');
+            if (!response.ok) {
+                throw new Error('Failed to fetch models');
+            }
+
+            this.availableModels = await response.json();
+
+            // Populate the dropdown
+            this.modelSelect.innerHTML = '';
+            this.availableModels.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model;
+                option.textContent = model;
+                this.modelSelect.appendChild(option);
+            });
+
+            // Set the selected model from localStorage or use first available
+            const savedModel = localStorage.getItem('scene-llm-model');
+            if (savedModel && this.availableModels.includes(savedModel)) {
+                this.selectedModel = savedModel;
+                this.modelSelect.value = savedModel;
+            } else if (this.availableModels.length > 0) {
+                this.selectedModel = this.availableModels[0];
+                this.modelSelect.value = this.selectedModel;
+            }
+        } catch (error) {
+            console.error('Failed to load models:', error);
+            this.modelSelect.innerHTML = '<option value="">Error loading models</option>';
+        }
     }
 
     async startNewSession() {
@@ -163,11 +207,12 @@ class SceneLLMChat {
         this.messageInput.value = '';
 
         try {
-            // Send message to server with current quality preference
+            // Send message to server with current quality preference and selected model
             const requestBody = {
                 session_id: this.sessionId,
                 message: message,
-                quality: this.renderQuality
+                quality: this.renderQuality,
+                model_id: this.selectedModel
             };
 
             console.log('Sending chat message:', requestBody);

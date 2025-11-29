@@ -79,6 +79,7 @@ func (s *Server) Start() error {
 
 	// API endpoints
 	http.HandleFunc("/api/health", s.handleHealth)
+	http.HandleFunc("/api/models", s.handleModels)
 	http.HandleFunc("/api/chat", s.handleChat)
 	http.HandleFunc("/api/chat/stream", s.handleChatStream)
 	http.HandleFunc("/api/chat/interrupt", s.handleInterrupt)
@@ -95,4 +96,28 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"status": "ok", "service": "scene-llm"}`))
+}
+
+// handleModels returns the list of available models
+func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	models := s.registry.ListModels()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	// Simple JSON array response
+	response := "["
+	for i, model := range models {
+		if i > 0 {
+			response += ","
+		}
+		response += fmt.Sprintf(`"%s"`, model)
+	}
+	response += "]"
+
+	w.Write([]byte(response))
 }
