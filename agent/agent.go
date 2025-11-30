@@ -83,14 +83,14 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []llm.Message) 
 			if errors.Is(err, context.Canceled) {
 				return messages, context.Canceled
 			}
-			a.events <- NewErrorEvent(fmt.Errorf("LLM generation failed: %w", err))
-			return messages, err
+			// Return error without sending event - the caller will send the error event
+			return messages, fmt.Errorf("LLM generation failed: %w", err)
 		}
 
 		// Check for empty response
 		if len(response.Parts) == 0 {
 			log.Printf("No response from LLM")
-			a.events <- NewErrorEvent(fmt.Errorf("no response from LLM"))
+			// Return error without sending event - the caller will send the error event
 			return messages, fmt.Errorf("no response from LLM")
 		}
 

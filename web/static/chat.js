@@ -252,7 +252,7 @@ class SceneLLMChat {
 
         } catch (error) {
             console.error('Failed to send message:', error);
-            this.addMessage('system', `Error: ${error.message}`);
+            this.addErrorMessage(`Failed to send message: ${error.message}`);
             this.isProcessing = false;
             this.updateInputState(true);
         }
@@ -338,7 +338,7 @@ class SceneLLMChat {
                     this.updateConnectionStatus('disconnected', 'Server restarted - please refresh');
                     this.addMessage('system', 'Server was restarted. Please refresh the page to continue.');
                 } else {
-                    this.addMessage('system', `Error: ${event.data}`);
+                    this.addErrorMessage(event.data);
                 }
                 break;
             case 'complete':
@@ -395,6 +395,71 @@ class SceneLLMChat {
         this.scrollToBottom();
     }
 
+    addErrorMessage(errorText) {
+        // Create container matching tool call style
+        const container = document.createElement('div');
+        container.className = 'tool-call-container error';
+
+        // Extract a short summary from the first line
+        const lines = errorText.split('\n');
+        const firstLine = lines[0] || errorText;
+
+        // Parse out the error message, handling different formats
+        let errorMessage = firstLine;
+
+        // Handle "Error XXX, Message: ..." format from API errors
+        const apiErrorMatch = firstLine.match(/Error \d+, Message: (.+)/);
+        if (apiErrorMatch) {
+            errorMessage = apiErrorMatch[1];
+        } else {
+            // Remove common prefixes
+            errorMessage = firstLine
+                .replace(/^Error:\s*/i, '')
+                .replace(/^LLM generation failed:\s*/i, '')
+                .replace(/^Gemini API error:\s*/i, '');
+        }
+
+        // Create summary line with expand/collapse button
+        const summaryDiv = document.createElement('div');
+        summaryDiv.className = 'tool-call-summary error';
+
+        const errorTextSpan = document.createElement('span');
+        errorTextSpan.className = 'error-summary-text';
+        errorTextSpan.textContent = `❌ API Error: ${errorMessage}`;
+
+        const expandButton = document.createElement('button');
+        expandButton.className = 'tool-call-expand';
+        expandButton.textContent = '[+]';
+        expandButton.setAttribute('aria-label', 'Show details');
+
+        summaryDiv.appendChild(errorTextSpan);
+        summaryDiv.appendChild(expandButton);
+
+        // Create details section (hidden by default)
+        const detailsDiv = document.createElement('div');
+        detailsDiv.className = 'tool-call-details';
+        detailsDiv.style.display = 'none';
+
+        // Format the error text for better readability
+        const formattedError = this.formatErrorDetails(errorText);
+        detailsDiv.innerHTML = `<div class="tool-call-error"><strong>Full error:</strong>${formattedError}</div>`;
+
+        // Toggle functionality
+        let expanded = false;
+        expandButton.addEventListener('click', () => {
+            expanded = !expanded;
+            detailsDiv.style.display = expanded ? 'block' : 'none';
+            expandButton.textContent = expanded ? '[-]' : '[+]';
+            expandButton.setAttribute('aria-label', expanded ? 'Hide details' : 'Show details');
+        });
+
+        container.appendChild(summaryDiv);
+        container.appendChild(detailsDiv);
+
+        // Add to or create tool calls group
+        this.addToToolCallsGroup(container);
+    }
+
     addProcessingMessage() {
         this.removeProcessingMessage(); // Remove any existing processing message
 
@@ -445,6 +510,81 @@ class SceneLLMChat {
             .replace(/`([^`]+)`/g, '<code>$1</code>');
 
         return formatted;
+    }
+
+    formatErrorDetails(errorText) {
+        // Format error text with better structure
+        let formatted = errorText;
+
+        // Extract and format the technical details section (Status and Details)
+        let detailsSection = '';
+
+        // Match everything from "Status:" to the end (or to "Please retry")
+        const statusMatch = formatted.match(/(Status: [^,]+, Details: \[.*\])/);
+        if (statusMatch) {
+            const technicalDetails = statusMatch[1];
+            // Remove from main text
+            formatted = formatted.replace(technicalDetails, '').replace(/,\s*$/, '').trim();
+
+            // Format the details in a collapsible technical section
+            detailsSection = `
+                <details class="error-technical-details">
+                    <summary>Technical details</summary>
+                    <pre>${this.escapeHtml(technicalDetails)}</pre>
+                </details>
+            `;
+        }
+
+        // Extract retry delay if present
+        const retryMatch = formatted.match(/Please retry in ([\d.]+s)/);
+        const retryDelay = retryMatch ? retryMatch[1] : null;
+
+        // Convert bullet points to HTML list items
+        const lines = formatted.split('\n');
+        let html = '';
+        let inList = false;
+
+        for (let line of lines) {
+            const trimmedLine = line.trim();
+
+            // Skip empty lines
+            if (!trimmedLine) continue;
+
+            // Check if line starts with bullet point
+            if (trimmedLine.startsWith('* ')) {
+                if (!inList) {
+                    html += '<ul>';
+                    inList = true;
+                }
+                html += `<li>${this.escapeHtml(trimmedLine.substring(2))}</li>`;
+            } else {
+                if (inList) {
+                    html += '</ul>';
+                    inList = false;
+                }
+                html += `<p>${this.escapeHtml(trimmedLine)}</p>`;
+            }
+        }
+
+        if (inList) {
+            html += '</ul>';
+        }
+
+        // Add retry information if available
+        if (retryDelay) {
+            html += `<p class="error-retry-info"><strong>⏱️ Retry after:</strong> ${retryDelay}</p>`;
+        }
+
+        // Add technical details at the end
+        html += detailsSection;
+
+        return html;
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
 
