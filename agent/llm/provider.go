@@ -2,6 +2,14 @@ package llm
 
 import "context"
 
+// Role represents the role of a message in a conversation
+type Role string
+
+const (
+	RoleUser      Role = "user"
+	RoleAssistant Role = "assistant"
+)
+
 // PartType represents the type of content in a message part
 type PartType string
 
@@ -14,7 +22,7 @@ const (
 
 // Message represents a provider-agnostic message in a conversation
 type Message struct {
-	Role  string // "user", "assistant", "function"
+	Role  Role // Type-safe role (user or assistant)
 	Parts []Part
 }
 
@@ -30,12 +38,14 @@ type Part struct {
 
 // FunctionCall represents a request to call a function/tool
 type FunctionCall struct {
+	ID        string // LLM-generated ID for tracking
 	Name      string
 	Arguments map[string]interface{}
 }
 
 // FunctionResponse represents the result of a function/tool execution
 type FunctionResponse struct {
+	ID       string // Matches the FunctionCall.ID
 	Name     string
 	Response map[string]interface{}
 }
@@ -91,10 +101,18 @@ type ModelInfo struct {
 	ContextWindow int    // Maximum context window in tokens
 }
 
+// GenerateRequest contains all parameters for generating LLM content
+type GenerateRequest struct {
+	Model        string    // Model ID to use
+	SystemPrompt string    // System prompt (separate from conversation)
+	Messages     []Message // Conversation history
+	Tools        []Tool    // Available tools
+}
+
 // LLMProvider defines the interface that all LLM providers must implement
 type LLMProvider interface {
 	// GenerateContent generates a response from the LLM with optional tool support
-	GenerateContent(ctx context.Context, model string, messages []Message, tools []Tool) (*Response, error)
+	GenerateContent(ctx context.Context, req *GenerateRequest) (*Response, error)
 
 	// ListModels returns the models available from this provider
 	ListModels() []ModelInfo

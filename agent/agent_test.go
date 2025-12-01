@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/df07/scene-llm/agent/llm"
@@ -15,7 +16,7 @@ type MockProvider struct {
 	CallCount int
 }
 
-func (m *MockProvider) GenerateContent(ctx context.Context, model string, messages []llm.Message, tools []llm.Tool) (*llm.Response, error) {
+func (m *MockProvider) GenerateContent(ctx context.Context, req *llm.GenerateRequest) (*llm.Response, error) {
 	if m.CallCount >= len(m.Responses) {
 		// Return empty response when we run out
 		return &llm.Response{
@@ -54,7 +55,11 @@ func NewMockResponse(text string, functionCalls ...*genai.FunctionCall) *genai.G
 		parts = append(parts, &genai.Part{Text: text})
 	}
 
-	for _, fc := range functionCalls {
+	for i, fc := range functionCalls {
+		// Add ID if not present
+		if fc.ID == "" {
+			fc.ID = fmt.Sprintf("call_%d", i)
+		}
 		parts = append(parts, &genai.Part{FunctionCall: fc})
 	}
 
@@ -101,7 +106,7 @@ func TestAgenticLoopSingleTurn(t *testing.T) {
 
 	conversation := []llm.Message{
 		{
-			Role:  "user",
+			Role:  llm.RoleUser,
 			Parts: []llm.Part{{Type: llm.PartTypeText, Text: "Create a red sphere"}},
 		},
 	}
@@ -167,7 +172,7 @@ func TestAgenticLoopMultiTurn(t *testing.T) {
 
 	conversation := []llm.Message{
 		{
-			Role:  "user",
+			Role:  llm.RoleUser,
 			Parts: []llm.Part{{Type: llm.PartTypeText, Text: "Create a sphere and make it big"}},
 		},
 	}
@@ -228,7 +233,7 @@ func TestAgenticLoopTurnLimit(t *testing.T) {
 
 	conversation := []llm.Message{
 		{
-			Role:  "user",
+			Role:  llm.RoleUser,
 			Parts: []llm.Part{{Type: llm.PartTypeText, Text: "Create many spheres"}},
 		},
 	}
@@ -299,7 +304,7 @@ func TestAgenticLoopErrorRecovery(t *testing.T) {
 
 	conversation := []llm.Message{
 		{
-			Role:  "user",
+			Role:  llm.RoleUser,
 			Parts: []llm.Part{{Type: llm.PartTypeText, Text: "Create a sphere"}},
 		},
 	}
@@ -374,7 +379,7 @@ func TestAgenticLoopMixedSuccessFailure(t *testing.T) {
 
 	conversation := []llm.Message{
 		{
-			Role:  "user",
+			Role:  llm.RoleUser,
 			Parts: []llm.Part{{Type: llm.PartTypeText, Text: "Create two spheres"}},
 		},
 	}
@@ -433,7 +438,7 @@ func TestMultipleTextParts(t *testing.T) {
 
 	conversation := []llm.Message{
 		{
-			Role:  "user",
+			Role:  llm.RoleUser,
 			Parts: []llm.Part{{Type: llm.PartTypeText, Text: "Test multiple parts"}},
 		},
 	}
@@ -488,7 +493,7 @@ func TestRenderSceneEmptyScene(t *testing.T) {
 		BaseToolRequest: BaseToolRequest{ToolType: "render_scene"},
 	}
 
-	result := agent.executeToolRequests(req)
+	result := agent.executeToolRequests(req, "test_call_1")
 
 	// Should fail with empty scene error
 	if result.Success {
@@ -570,7 +575,7 @@ func TestRenderSceneWithShape(t *testing.T) {
 	}
 
 	// Execute the render (this will actually render, but should be fast for 100x75)
-	result := agent.executeToolRequests(req)
+	result := agent.executeToolRequests(req, "test_call_1")
 
 	// Should succeed
 	if !result.Success {
@@ -684,7 +689,7 @@ func TestGetSceneStateWithEmptyScene(t *testing.T) {
 		BaseToolRequest: BaseToolRequest{ToolType: "get_scene_state"},
 	}
 
-	result := agent.executeToolRequests(req)
+	result := agent.executeToolRequests(req, "test_call_1")
 
 	if !result.Success {
 		t.Fatalf("Expected success, got errors: %v", result.Errors)
@@ -753,7 +758,7 @@ func TestGetSceneStateWithShapesAndLights(t *testing.T) {
 		BaseToolRequest: BaseToolRequest{ToolType: "get_scene_state"},
 	}
 
-	result := agent.executeToolRequests(req)
+	result := agent.executeToolRequests(req, "test_call_1")
 
 	if !result.Success {
 		t.Fatalf("Expected success, got errors: %v", result.Errors)
@@ -849,7 +854,7 @@ func TestConversationHistoryPreserved(t *testing.T) {
 	// Initial conversation with one user message
 	conversation := []llm.Message{
 		{
-			Role:  "user",
+			Role:  llm.RoleUser,
 			Parts: []llm.Part{{Type: llm.PartTypeText, Text: "Create a red sphere"}},
 		},
 	}
@@ -871,12 +876,12 @@ func TestConversationHistoryPreserved(t *testing.T) {
 	}
 
 	// Check message 0: original user message
-	if updatedConversation[0].Role != "user" {
+	if updatedConversation[0].Role != llm.RoleUser {
 		t.Errorf("Message 0: expected role 'user', got %q", updatedConversation[0].Role)
 	}
 
 	// Check message 1: assistant response with function call
-	if updatedConversation[1].Role != "assistant" {
+	if updatedConversation[1].Role != llm.RoleAssistant {
 		t.Errorf("Message 1: expected role 'assistant', got %q", updatedConversation[1].Role)
 	}
 
@@ -899,8 +904,8 @@ func TestConversationHistoryPreserved(t *testing.T) {
 	}
 
 	// Check message 2: function response
-	if updatedConversation[2].Role != "function" {
-		t.Errorf("Message 2: expected role 'function', got %q", updatedConversation[2].Role)
+	if updatedConversation[2].Role != llm.RoleUser {
+		t.Errorf("Message 2: expected role 'user' (function responses), got %q", updatedConversation[2].Role)
 	}
 
 	// Should have function response parts
@@ -919,7 +924,7 @@ func TestConversationHistoryPreserved(t *testing.T) {
 	}
 
 	// Check message 3: final assistant response (text only, no function calls)
-	if updatedConversation[3].Role != "assistant" {
+	if updatedConversation[3].Role != llm.RoleAssistant {
 		t.Errorf("Message 3: expected role 'assistant', got %q", updatedConversation[3].Role)
 	}
 
@@ -998,7 +1003,7 @@ func TestMultiTurnConversationHistory(t *testing.T) {
 	// Turn 1: First user message
 	conversation := []llm.Message{
 		{
-			Role:  "user",
+			Role:  llm.RoleUser,
 			Parts: []llm.Part{{Type: llm.PartTypeText, Text: "Create a red sphere"}},
 		},
 	}
@@ -1040,16 +1045,16 @@ func TestMultiTurnConversationHistory(t *testing.T) {
 	}
 
 	// Verify turn 2 messages have correct structure
-	if conversation[4].Role != "user" {
+	if conversation[4].Role != llm.RoleUser {
 		t.Errorf("Message 4: expected role 'user', got %q", conversation[4].Role)
 	}
-	if conversation[5].Role != "assistant" {
+	if conversation[5].Role != llm.RoleAssistant {
 		t.Errorf("Message 5: expected role 'assistant', got %q", conversation[5].Role)
 	}
-	if conversation[6].Role != "function" {
-		t.Errorf("Message 6: expected role 'function', got %q", conversation[6].Role)
+	if conversation[6].Role != llm.RoleUser {
+		t.Errorf("Message 6: expected role 'user' (function responses), got %q", conversation[6].Role)
 	}
-	if conversation[7].Role != "assistant" {
+	if conversation[7].Role != llm.RoleAssistant {
 		t.Errorf("Message 7: expected role 'assistant', got %q", conversation[7].Role)
 	}
 
@@ -1072,7 +1077,7 @@ func TestMultiTurnConversationHistory(t *testing.T) {
 	// Verify the update_shape function call is in the conversation
 	foundUpdateCall := false
 	for i := 8; i < len(conversation); i++ {
-		if conversation[i].Role == "assistant" {
+		if conversation[i].Role == llm.RoleAssistant {
 			for _, part := range conversation[i].Parts {
 				if part.Type == llm.PartTypeFunctionCall && part.FunctionCall != nil {
 					if part.FunctionCall.Name == "update_shape" {
@@ -1093,15 +1098,21 @@ func TestMultiTurnConversationHistory(t *testing.T) {
 		t.Error("Expected to find update_shape function call in turn 3")
 	}
 
-	// Verify all user messages are preserved
-	userMessageCount := 0
+	// Verify all original user messages are preserved (count messages with text parts, not function responses)
+	originalUserMessageCount := 0
 	for _, msg := range conversation {
-		if msg.Role == "user" {
-			userMessageCount++
+		if msg.Role == llm.RoleUser {
+			// Check if this is an original user message (has text parts) vs function response
+			for _, part := range msg.Parts {
+				if part.Type == llm.PartTypeText {
+					originalUserMessageCount++
+					break
+				}
+			}
 		}
 	}
-	if userMessageCount != 3 {
-		t.Errorf("Expected 3 user messages, got %d", userMessageCount)
+	if originalUserMessageCount != 3 {
+		t.Errorf("Expected 3 original user messages, got %d", originalUserMessageCount)
 	}
 
 	// Drain events

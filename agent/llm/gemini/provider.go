@@ -28,7 +28,20 @@ func NewProvider(ctx context.Context, apiKey string) (*Provider, error) {
 }
 
 // GenerateContent generates a response from the LLM with optional tool support
-func (p *Provider) GenerateContent(ctx context.Context, model string, messages []llm.Message, tools []llm.Tool) (*llm.Response, error) {
+func (p *Provider) GenerateContent(ctx context.Context, req *llm.GenerateRequest) (*llm.Response, error) {
+	// Prepend system prompt as a user message if provided
+	// Gemini doesn't have a separate system parameter, so we add it as the first message
+	messages := req.Messages
+	if req.SystemPrompt != "" {
+		systemMsg := llm.Message{
+			Role: llm.RoleUser,
+			Parts: []llm.Part{
+				{Type: llm.PartTypeText, Text: req.SystemPrompt},
+			},
+		}
+		messages = append([]llm.Message{systemMsg}, messages...)
+	}
+
 	// Convert internal format to genai format
 	genaiMessages := FromInternalMessages(messages)
 
@@ -36,13 +49,13 @@ func (p *Provider) GenerateContent(ctx context.Context, model string, messages [
 	config := &genai.GenerateContentConfig{}
 
 	// Add tools if provided
-	if len(tools) > 0 {
-		genaiTools := FromInternalTools(tools)
+	if len(req.Tools) > 0 {
+		genaiTools := FromInternalTools(req.Tools)
 		config.Tools = []*genai.Tool{{FunctionDeclarations: genaiTools}}
 	}
 
 	// Call Gemini API
-	resp, err := p.client.Models.GenerateContent(ctx, model, genaiMessages, config)
+	resp, err := p.client.Models.GenerateContent(ctx, req.Model, genaiMessages, config)
 	if err != nil {
 		return nil, fmt.Errorf("Gemini API error: %w", err)
 	}

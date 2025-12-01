@@ -32,7 +32,7 @@ func TestExecuteToolRequestWithoutAPI(t *testing.T) {
 		}
 
 		// Execute the operation
-		agent.executeToolRequests(operation)
+		agent.executeToolRequests(operation, "test_call_1")
 
 		// Check that a ToolCallEvent was emitted
 		select {
@@ -76,7 +76,7 @@ func TestExecuteToolRequestWithoutAPI(t *testing.T) {
 		}
 
 		// Execute the operation
-		agent.executeToolRequests(operation)
+		agent.executeToolRequests(operation, "test_call_1")
 
 		// Check that a ToolCallEvent was emitted
 		select {
@@ -116,7 +116,7 @@ func TestExecuteToolRequestWithoutAPI(t *testing.T) {
 		}
 
 		// Execute the operation
-		agent.executeToolRequests(operation)
+		agent.executeToolRequests(operation, "test_call_1")
 
 		// Check that a ToolCallEvent was emitted
 		select {
@@ -162,7 +162,7 @@ func TestExecuteToolRequestWithoutAPI(t *testing.T) {
 		}
 
 		// Execute the operation
-		agent.executeToolRequests(operation)
+		agent.executeToolRequests(operation, "test_call_1")
 
 		// Check that a failed ToolCallEvent was emitted
 		select {

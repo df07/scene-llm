@@ -56,8 +56,8 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []llm.Message) 
 	// Build scene context from our internal scene manager
 	sceneContext := a.sceneManager.BuildContext()
 
-	// Add scene context to the latest message
-	conversation = a.addSceneContext(conversation, sceneContext)
+	// Build system prompt with scene context
+	systemPrompt := buildSystemPrompt(sceneContext)
 
 	// Get tool declarations in provider-agnostic format
 	tools := getAllTools()
@@ -75,8 +75,14 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []llm.Message) 
 			return messages, nil
 		}
 
-		// Generate content using provider
-		response, err := a.provider.GenerateContent(ctx, a.modelID, messages, tools)
+		// Generate content using provider with new request struct
+		req := &llm.GenerateRequest{
+			Model:        a.modelID,
+			SystemPrompt: systemPrompt,
+			Messages:     messages,
+			Tools:        tools,
+		}
+		response, err := a.provider.GenerateContent(ctx, req)
 		if err != nil {
 			log.Printf("Failed to generate content: %v", err)
 			// Check if this is a context cancellation
@@ -108,7 +114,7 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []llm.Message) 
 
 		// Append assistant's response to conversation
 		messages = append(messages, llm.Message{
-			Role:  "assistant",
+			Role:  llm.RoleAssistant,
 			Parts: response.Parts,
 		})
 
@@ -123,7 +129,7 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []llm.Message) 
 			operation := parseToolRequestFromFunctionCall(fc)
 			if operation != nil {
 				hasToolRequests = true
-				toolResult := a.executeToolRequests(operation)
+				toolResult := a.executeToolRequests(operation, fc.ID)
 
 				// Convert result to internal format
 				resultMap := make(map[string]interface{})
@@ -138,6 +144,7 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []llm.Message) 
 				functionResponses = append(functionResponses, llm.Part{
 					Type: llm.PartTypeFunctionResponse,
 					FunctionResp: &llm.FunctionResponse{
+						ID:       fc.ID,
 						Name:     fc.Name,
 						Response: resultMap,
 					},
@@ -170,7 +177,7 @@ func (a *Agent) ProcessMessage(ctx context.Context, conversation []llm.Message) 
 		// Append function responses
 		if len(functionResponses) > 0 {
 			messages = append(messages, llm.Message{
-				Role:  "function",
+				Role:  llm.RoleUser,
 				Parts: functionResponses,
 			})
 		}
@@ -191,9 +198,8 @@ type ToolResult struct {
 }
 
 // executeToolRequests executes a tool operation and returns structured result
-func (a *Agent) executeToolRequests(operation ToolRequest) ToolResult {
+func (a *Agent) executeToolRequests(operation ToolRequest, toolCallID string) ToolResult {
 	startTime := time.Now()
-	toolCallID := fmt.Sprintf("%s_%d", operation.ToolName(), startTime.UnixNano())
 	var err error
 	var result interface{}
 
@@ -378,22 +384,9 @@ func (a *Agent) executeToolRequests(operation ToolRequest) ToolResult {
 	return ToolResult{Success: false, Errors: errors}
 }
 
-// addSceneContext prepends scene context to the latest user message
-func (a *Agent) addSceneContext(conversation []llm.Message, sceneContext string) []llm.Message {
-	if len(conversation) == 0 {
-		return conversation
-	}
-
-	// Make a copy to avoid modifying the original
-	contextualizedConversation := make([]llm.Message, len(conversation))
-	copy(contextualizedConversation, conversation)
-
-	// Add context to the latest user message
-	lastMessage := &contextualizedConversation[len(contextualizedConversation)-1]
-	if lastMessage.Role == "user" && len(lastMessage.Parts) > 0 {
-		originalText := lastMessage.Parts[0].Text
-
-		systemPrompt := `You are an autonomous 3D scene creation assistant with vision capabilities. Your job is to help users create and modify 3D scenes using raytracing.
+// buildSystemPrompt constructs the system prompt with scene context
+func buildSystemPrompt(sceneContext string) string {
+	return fmt.Sprintf(`You are an autonomous 3D scene creation assistant with vision capabilities. Your job is to help users create and modify 3D scenes using raytracing.
 
 AVAILABLE TOOLS:
 You have access to tools for creating, updating, and removing shapes and lights. Each tool call will return a JSON result showing you what happened.
@@ -420,18 +413,7 @@ TOOL RESULTS:
 The results show the complete state of each object, including any defaults that were applied. Use these to track what's in the scene and validate your work.
 
 CURRENT SCENE:
-%s
-
-USER REQUEST:
-%s`
-
-		contextualText := fmt.Sprintf(systemPrompt, sceneContext, originalText)
-
-		// Create a new part with the contextualized text
-		lastMessage.Parts[0] = llm.Part{Type: llm.PartTypeText, Text: contextualText}
-	}
-
-	return contextualizedConversation
+%s`, sceneContext)
 }
 
 // Close cleans up the agent resources

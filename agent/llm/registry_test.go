@@ -11,7 +11,7 @@ type MockProvider struct {
 	models []ModelInfo
 }
 
-func (m *MockProvider) GenerateContent(ctx context.Context, model string, messages []Message, tools []Tool) (*Response, error) {
+func (m *MockProvider) GenerateContent(ctx context.Context, req *GenerateRequest) (*Response, error) {
 	return &Response{
 		Parts:      []Part{{Type: PartTypeText, Text: "mock response"}},
 		StopReason: "stop",

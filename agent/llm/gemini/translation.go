@@ -3,6 +3,7 @@ package gemini
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/df07/scene-llm/agent/llm"
 	"google.golang.org/genai"
@@ -25,9 +26,11 @@ func ToInternalMessage(content *genai.Content) llm.Message {
 	}
 
 	// Map genai role to internal role
-	role := content.Role
-	if role == "model" {
-		role = "assistant"
+	var role llm.Role
+	if content.Role == "model" {
+		role = llm.RoleAssistant
+	} else {
+		role = llm.RoleUser
 	}
 
 	return llm.Message{
@@ -52,9 +55,16 @@ func ToInternalPart(part *genai.Part) llm.Part {
 
 	// Function call
 	if part.FunctionCall != nil {
+		// Generate ID if not provided by Gemini SDK
+		id := part.FunctionCall.ID
+		if id == "" {
+			id = fmt.Sprintf("call_%d", time.Now().UnixNano())
+		}
+
 		return llm.Part{
 			Type: llm.PartTypeFunctionCall,
 			FunctionCall: &llm.FunctionCall{
+				ID:        id,
 				Name:      part.FunctionCall.Name,
 				Arguments: part.FunctionCall.Args,
 			},
@@ -63,9 +73,16 @@ func ToInternalPart(part *genai.Part) llm.Part {
 
 	// Function response
 	if part.FunctionResponse != nil {
+		// Generate ID if not provided
+		id := part.FunctionResponse.ID
+		if id == "" {
+			id = fmt.Sprintf("resp_%d", time.Now().UnixNano())
+		}
+
 		return llm.Part{
 			Type: llm.PartTypeFunctionResponse,
 			FunctionResp: &llm.FunctionResponse{
+				ID:       id,
 				Name:     part.FunctionResponse.Name,
 				Response: part.FunctionResponse.Response,
 			},
@@ -107,9 +124,9 @@ func FromInternalMessage(msg llm.Message) *genai.Content {
 	}
 
 	// Map internal role to genai role
-	role := msg.Role
-	if role == "assistant" {
-		role = "model"
+	role := string(msg.Role) // Convert Role type to string
+	if msg.Role == llm.RoleAssistant {
+		role = "model" // Gemini uses "model" instead of "assistant"
 	}
 
 	return &genai.Content{
@@ -133,6 +150,7 @@ func FromInternalPart(part llm.Part) *genai.Part {
 		}
 		return &genai.Part{
 			FunctionCall: &genai.FunctionCall{
+				ID:   part.FunctionCall.ID, // Include ID
 				Name: part.FunctionCall.Name,
 				Args: part.FunctionCall.Arguments,
 			},
@@ -144,6 +162,7 @@ func FromInternalPart(part llm.Part) *genai.Part {
 		}
 		return &genai.Part{
 			FunctionResponse: &genai.FunctionResponse{
+				ID:       part.FunctionResp.ID, // Include ID
 				Name:     part.FunctionResp.Name,
 				Response: part.FunctionResp.Response,
 			},
