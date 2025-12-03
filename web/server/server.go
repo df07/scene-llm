@@ -110,26 +110,37 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"status": "ok", "service": "scene-llm"}`))
 }
 
-// handleModels returns the list of available models
+// handleModels returns the list of available models grouped by provider
 func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	models := s.registry.ListModels()
+	grouped := s.registry.ListModelsGrouped()
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
-	// Simple JSON array response
-	response := "["
-	for i, model := range models {
-		if i > 0 {
+	// Build JSON response with grouped models
+	// Format: { "google": [...], "claude": [...] }
+	response := "{"
+	first := true
+	for provider, models := range grouped {
+		if !first {
 			response += ","
 		}
-		response += fmt.Sprintf(`"%s"`, model)
+		first = false
+
+		response += fmt.Sprintf(`"%s":[`, provider)
+		for i, model := range models {
+			if i > 0 {
+				response += ","
+			}
+			response += fmt.Sprintf(`{"id":"%s","name":"%s"}`, model.ID, model.DisplayName)
+		}
+		response += "]"
 	}
-	response += "]"
+	response += "}"
 
 	w.Write([]byte(response))
 }

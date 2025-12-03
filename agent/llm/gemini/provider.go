@@ -3,6 +3,7 @@ package gemini
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/df07/scene-llm/agent/llm"
@@ -94,6 +95,14 @@ func (p *Provider) ListModels() []llm.ModelInfo {
 			if strings.Contains(modelID, exclude) {
 				return false
 			}
+		}
+
+		// Exclude dated variants - match patterns like:
+		// -MMDD, -MM-DD, -YYYYMMDD, -YYYY-MM-DD, -preview-MM-DD, -exp-MMDD, -001, -1219
+		// Pattern: dash followed by digits (optionally with dashes) at the end
+		datedPattern := regexp.MustCompile(`-\d{2,4}(-\d{2})?(-\d{2})?$`)
+		if datedPattern.MatchString(modelID) {
+			return false
 		}
 
 		return true

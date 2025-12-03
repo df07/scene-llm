@@ -116,16 +116,43 @@ class SceneLLMChat {
                 throw new Error('Failed to fetch models');
             }
 
-            this.availableModels = await response.json();
+            const groupedModels = await response.json();
 
-            // Populate the dropdown
+            // Populate the dropdown with grouped models
             this.modelSelect.innerHTML = '';
-            this.availableModels.forEach(model => {
-                const option = document.createElement('option');
-                option.value = model;
-                option.textContent = model;
-                this.modelSelect.appendChild(option);
+
+            // Flatten models for selection tracking
+            const allModelIds = [];
+
+            // Provider display names
+            const providerNames = {
+                'google': 'Google Gemini',
+                'claude': 'Anthropic Claude'
+            };
+
+            // Sort providers alphabetically for consistent display
+            const providers = Object.keys(groupedModels).sort();
+
+            providers.forEach(provider => {
+                const models = groupedModels[provider];
+                if (models.length === 0) return;
+
+                // Create optgroup for this provider
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = providerNames[provider] || provider;
+
+                models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = model.name;
+                    optgroup.appendChild(option);
+                    allModelIds.push(model.id);
+                });
+
+                this.modelSelect.appendChild(optgroup);
             });
+
+            this.availableModels = allModelIds;
 
             // Set the selected model from localStorage or use first available
             const savedModel = localStorage.getItem('scene-llm-model');

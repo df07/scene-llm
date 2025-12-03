@@ -58,3 +58,23 @@ func (r *Registry) ListModels() []string {
 
 	return models
 }
+
+// ListModelsGrouped returns all available models grouped by provider
+// Models within each provider are sorted reverse alphabetically
+func (r *Registry) ListModelsGrouped() map[string][]ModelInfo {
+	grouped := make(map[string][]ModelInfo)
+
+	// Collect models from each provider
+	for providerName, provider := range r.providers {
+		models := provider.ListModels()
+
+		// Sort models reverse alphabetically (newer versions first)
+		sort.Slice(models, func(i, j int) bool {
+			return models[i].ID > models[j].ID
+		})
+
+		grouped[providerName] = models
+	}
+
+	return grouped
+}
