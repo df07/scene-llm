@@ -127,7 +127,8 @@ class SceneLLMChat {
             // Provider display names
             const providerNames = {
                 'google': 'Google Gemini',
-                'claude': 'Anthropic Claude'
+                'claude': 'Anthropic Claude',
+                'openrouter': 'OpenRouter'
             };
 
             // Sort providers alphabetically for consistent display

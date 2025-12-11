@@ -11,6 +11,7 @@ import (
 	"github.com/df07/scene-llm/agent/llm"
 	"github.com/df07/scene-llm/agent/llm/claude"
 	"github.com/df07/scene-llm/agent/llm/gemini"
+	"github.com/df07/scene-llm/agent/llm/openrouter"
 )
 
 // Server handles web requests for the scene LLM
@@ -69,9 +70,20 @@ func (s *Server) initializeProviders() error {
 		}
 	}
 
+	// Try to add OpenRouter provider
+	if os.Getenv("OPENROUTER_API_KEY") != "" {
+		provider, err := openrouter.NewProvider("")
+		if err != nil {
+			log.Printf("Warning: Failed to initialize OpenRouter provider: %v", err)
+		} else {
+			s.registry.Add(provider)
+			log.Printf("Initialized OpenRouter provider")
+		}
+	}
+
 	// Validate at least one provider is available
 	if len(s.registry.ListModels()) == 0 {
-		return fmt.Errorf("no LLM providers available - set GOOGLE_API_KEY or ANTHROPIC_API_KEY environment variable")
+		return fmt.Errorf("no LLM providers available - set GOOGLE_API_KEY, ANTHROPIC_API_KEY, or OPENROUTER_API_KEY environment variable")
 	}
 
 	log.Printf("Available models: %v", s.registry.ListModels())
