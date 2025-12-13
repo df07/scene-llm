@@ -59,8 +59,16 @@ func (p *Provider) ListModels() []llm.ModelInfo {
 	return []llm.ModelInfo{
 		// OpenAI
 		{
-			ID:            "openai/gpt-4o",
-			DisplayName:   "GPT-4o",
+			ID:            "openai/gpt-5.1",
+			DisplayName:   "GPT-5.1",
+			Provider:      "openrouter",
+			Vision:        true,
+			Thinking:      false,
+			ContextWindow: 400000,
+		},
+		{
+			ID:            "openai/gpt-oss-120b",
+			DisplayName:   "GPT-OSS-120B",
 			Provider:      "openrouter",
 			Vision:        true,
 			Thinking:      false,

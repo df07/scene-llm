@@ -51,7 +51,8 @@ func TestProvider_ListModels(t *testing.T) {
 
 	// Verify we have some popular models (excluding Anthropic/Google - available via direct providers)
 	expectedModels := map[string]bool{
-		"openai/gpt-4o":                     false,
+		"openai/gpt-5.1":                    false,
+		"openai/gpt-oss-120b":               false,
 		"openai/o1":                         false,
 		"x-ai/grok-beta":                    false,
 		"deepseek/deepseek-chat":            false,
