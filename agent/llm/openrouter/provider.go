@@ -2,7 +2,9 @@ package openrouter
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/df07/scene-llm/agent/llm"
@@ -41,6 +43,14 @@ func (p *Provider) GenerateContent(ctx context.Context, req *llm.GenerateRequest
 	// Add tools if provided
 	if len(req.Tools) > 0 {
 		orRequest.Tools = FromInternalTools(req.Tools)
+
+		// Debug: Log the tools being sent
+		if len(orRequest.Tools) > 0 {
+			toolsJSON, err := json.MarshalIndent(orRequest.Tools, "", "  ")
+			if err == nil {
+				log.Printf("[OpenRouter] Sending %d tools to model %s:\n%s", len(orRequest.Tools), req.Model, string(toolsJSON))
+			}
+		}
 	}
 
 	// Call OpenRouter API

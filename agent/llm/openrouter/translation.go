@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"github.com/df07/scene-llm/agent/llm"
 	"github.com/revrost/go-openrouter"
@@ -190,6 +191,13 @@ func schemaToMap(schema *llm.Schema) map[string]interface{} {
 			props[name] = schemaToMap(propSchema)
 		}
 		result["properties"] = props
+	} else if schema.Type == llm.TypeObject {
+		// For objects with no defined properties, allow arbitrary additional properties
+		// This is important for flexible schemas like shape/light properties
+		// Include an empty properties object to signal to strict models (like GPT-5.1)
+		// that this is a real object, not something that can be omitted
+		result["properties"] = make(map[string]interface{})
+		result["additionalProperties"] = true
 	}
 
 	if schema.Items != nil {
@@ -231,12 +239,21 @@ func ToInternalResponse(resp openrouter.ChatCompletionResponse) (*llm.Response, 
 				continue
 			}
 
+			// Debug: Log raw tool call
+			log.Printf("[OpenRouter] Received tool call: name=%s, id=%s, args=%s",
+				toolCall.Function.Name, toolCall.ID, toolCall.Function.Arguments)
+
 			// Parse arguments JSON
 			var args map[string]interface{}
 			if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
 				// If parsing fails, skip this tool call
+				log.Printf("[OpenRouter] ERROR: Failed to parse tool call arguments: %v", err)
 				continue
 			}
+
+			// Debug: Log parsed arguments
+			argsJSON, _ := json.MarshalIndent(args, "", "  ")
+			log.Printf("[OpenRouter] Parsed arguments for %s:\n%s", toolCall.Function.Name, string(argsJSON))
 
 			parts = append(parts, llm.Part{
 				Type: llm.PartTypeFunctionCall,

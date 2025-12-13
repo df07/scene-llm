@@ -52,6 +52,40 @@ func TestSchemaToMap(t *testing.T) {
 	}
 }
 
+func TestSchemaToMap_AdditionalProperties(t *testing.T) {
+	// Test that objects without defined properties get empty properties + additionalProperties: true
+	schema := &llm.Schema{
+		Type:        llm.TypeObject,
+		Description: "Flexible object with arbitrary properties",
+	}
+
+	result := schemaToMap(schema)
+
+	if result["type"] != "object" {
+		t.Errorf("Expected type 'object', got %v", result["type"])
+	}
+
+	// Should have empty properties object
+	props, ok := result["properties"].(map[string]interface{})
+	if !ok {
+		t.Fatal("properties should be a map")
+	}
+
+	if len(props) != 0 {
+		t.Errorf("Expected empty properties map, got %d properties", len(props))
+	}
+
+	// Should have additionalProperties: true
+	additionalProps, ok := result["additionalProperties"].(bool)
+	if !ok {
+		t.Fatal("additionalProperties should be a bool")
+	}
+
+	if !additionalProps {
+		t.Error("Expected additionalProperties to be true for object with no defined properties")
+	}
+}
+
 func TestFromInternalTools(t *testing.T) {
 	tools := []llm.Tool{
 		{
