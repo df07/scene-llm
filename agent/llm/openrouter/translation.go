@@ -239,21 +239,14 @@ func ToInternalResponse(resp openrouter.ChatCompletionResponse) (*llm.Response, 
 				continue
 			}
 
-			// Debug: Log raw tool call
-			log.Printf("[OpenRouter] Received tool call: name=%s, id=%s, args=%s",
-				toolCall.Function.Name, toolCall.ID, toolCall.Function.Arguments)
-
 			// Parse arguments JSON
 			var args map[string]interface{}
 			if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
-				// If parsing fails, skip this tool call
-				log.Printf("[OpenRouter] ERROR: Failed to parse tool call arguments: %v", err)
+				// Log parsing failures to help debug issues
+				log.Printf("[OpenRouter] Failed to parse tool call %s (id=%s): %v\nRaw arguments: %s",
+					toolCall.Function.Name, toolCall.ID, err, toolCall.Function.Arguments)
 				continue
 			}
-
-			// Debug: Log parsed arguments
-			argsJSON, _ := json.MarshalIndent(args, "", "  ")
-			log.Printf("[OpenRouter] Parsed arguments for %s:\n%s", toolCall.Function.Name, string(argsJSON))
 
 			parts = append(parts, llm.Part{
 				Type: llm.PartTypeFunctionCall,
